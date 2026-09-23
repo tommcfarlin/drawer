@@ -36,7 +36,23 @@
       "comment": "Shown when the drawer can't close because [ is right of ]",
       "extractionState": "manual"
     },
+    "No Drawer Icons Fit Beside the Notch": {
+      "comment": "Notch hint: none of the drawer's icons are visible beside the MacBook notch",
+      "extractionState": "manual"
+    },
+    "Only the %lld Icons Nearest ] Fit Beside the Notch": {
+      "comment": "Notch hint: how many drawer icons are visible beside the notch",
+      "extractionState": "manual"
+    },
+    "Only the Icon Nearest ] Fits Beside the Notch": {
+      "comment": "Notch hint: one drawer icon is visible",
+      "extractionState": "manual"
+    },
     "Open Drawer": {
+      "extractionState": "manual"
+    },
+    "Open the Drawer and ⌘-Drag Your Favorites Next to ]": {
+      "comment": "Notch hint while closed: suggestion",
       "extractionState": "manual"
     },
     "Pressware": {
@@ -56,6 +72,30 @@
     },
     "Throw your menu bar icons into a drawer. Pull them out when you need them.": {
       "comment": "Tagline in the About panel",
+      "extractionState": "manual"
+    },
+    "Too Many Icons Outside the Drawer to Fit Beside the Notch": {
+      "comment": "Notch warning: the icons right of ] don't fit beside the MacBook notch",
+      "extractionState": "manual"
+    },
+    "When Open, No Drawer Icons Fit Beside the Notch": {
+      "comment": "Notch hint while closed: none of the drawer's icons fit beside the notch when open",
+      "extractionState": "manual"
+    },
+    "When Open, Only the %lld Icons Nearest ] Fit Beside the Notch": {
+      "comment": "Notch hint while closed: how many drawer icons fit beside the notch when open",
+      "extractionState": "manual"
+    },
+    "When Open, Only the Icon Nearest ] Fits Beside the Notch": {
+      "comment": "Notch hint while closed: one drawer icon fits when open",
+      "extractionState": "manual"
+    },
+    "⌘-Drag Some Icons Into the Drawer": {
+      "comment": "Notch warning: suggestion to move icons into the drawer",
+      "extractionState": "manual"
+    },
+    "⌘-Drag Your Favorites Next to ]": {
+      "comment": "Notch hint: suggestion to move favorite icons next to ]",
       "extractionState": "manual"
     }
   },
