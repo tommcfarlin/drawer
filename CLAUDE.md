@@ -52,6 +52,10 @@ Every issue has:
 - The menu bar reports placeholder frames for ~250 ms after launch; restoring a closed drawer waits for positions to settle
 - State is persisted in `UserDefaults` under `drawerState` (`open` / `closed`)
 - The menu bar can't be clicked from the command line (no Accessibility access); verify layout with `CGWindowListCopyWindowInfo` and ask Tom to click-test
+- Opening Drawer again while it's running opens the drawer (`applicationShouldHandleReopen`)
+- The right-click menu is rebuilt each time it opens (`makeMenu(notice:)`); refused or failed closes are explained with a dimmed notice line, never a beep alone
+- All user-facing text goes through `String(localized:)` and `Drawer/Localizable.xcstrings`; add new strings to the catalog
+- Menu bar images are template images; custom ones must be pixel-aligned (see `bracketRects`)
 - Minimum macOS 26; universal binary; sandboxed; no permissions; no network
 
 ## Signing
