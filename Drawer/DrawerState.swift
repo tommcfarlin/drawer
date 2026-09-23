@@ -10,6 +10,9 @@ enum DrawerState: String {
     /// The front (the shut drawer) only exists while closed.
     var showsFront: Bool { self == .closed }
 
+    /// The menu command for what clicking the drawer will do next.
+    var menuActionTitle: String { self == .open ? "Close Drawer" : "Open Drawer" }
+
     /// What clicking the drawer will do next.
     var accessibilityLabel: String { self == .open ? "Close drawer" : "Open drawer" }
 }
