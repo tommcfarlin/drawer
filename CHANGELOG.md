@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-09-23
+
+### Added
+- On a MacBook with a notch, Drawer tells you how many of the drawer's icons fit beside the notch, and suggests keeping your favorites right next to `]` so they stay visible.
+- Drawer's right-click menu and tooltip show how many drawer icons fit, whether the drawer is open or closed.
+- When the icons outside the drawer won't all fit beside the notch, Drawer warns you and suggests moving some into the drawer.
+- It needs no special permissions, never pops up on its own, and changes nothing on Macs without a notched display.
+
+### Fixed
+- Fixed an issue where the drawer would reopen when starting Drawer again after quitting with the drawer open, so it now stays closed with its archive box in place.
+
 ## [0.1.1] - 2026-09-23
 
 ### Fixed
