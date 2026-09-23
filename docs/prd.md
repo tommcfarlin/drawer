@@ -128,9 +128,10 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | F10 | App will not close the drawer if the handle is to the right of the wall. |
 | F11 | First launch starts open. |
 | F12 | While open, Drawer adds nothing to the menu bar besides `[` and `]` (no empty space or hover highlight). |
-| F13 | Opening Drawer again while it's running opens the drawer. |
+| F13 | Opening Drawer again while it's running opens the drawer (and does nothing if it's already open). |
 | F14 | A refused or failed close is explained in the menu, not only with a beep. |
 | F15 | Each drawer item has a tooltip naming what a click will do. |
+| F16 | Opening and closing are instant, with a quick bounce on the drawer's own icon (the archive box on close, `]` on open); no bounce when Reduce Motion is on. |
 
 ### Non-functional
 

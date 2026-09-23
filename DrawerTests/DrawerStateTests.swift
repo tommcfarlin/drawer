@@ -155,6 +155,28 @@ final class DrawerStateTests: XCTestCase {
         }
     }
 
+    // MARK: - bounce
+
+    func testBounceStartsAndEndsAtRest() {
+        XCTAssertEqual(bounceScales.first, 1)
+        XCTAssertEqual(bounceScales.last, 1)
+    }
+
+    func testBounceKeyTimesMatchScalesAndSpanTheDuration() {
+        XCTAssertEqual(bounceKeyTimes.count, bounceScales.count)
+        XCTAssertEqual(bounceKeyTimes.first, 0)
+        XCTAssertEqual(bounceKeyTimes.last, 1)
+        XCTAssertEqual(bounceKeyTimes, bounceKeyTimes.sorted())
+    }
+
+    func testBounceIsSubtle() {
+        XCTAssertLessThan(bounceDuration, 0.5)
+        for scale in bounceScales {
+            XCTAssertGreaterThanOrEqual(scale, 0.8)
+            XCTAssertLessThanOrEqual(scale, 1.15)
+        }
+    }
+
     // MARK: - clickAction
 
     func testRightClickShowsMenu() {
@@ -175,6 +197,21 @@ final class DrawerStateTests: XCTestCase {
 
     func testKeyboardPressToggles() {
         XCTAssertEqual(clickAction(eventType: .keyDown, modifiers: []), .toggle)
+    }
+
+    // MARK: - isNoOp
+
+    func testUserRequestForCurrentStateIsNoOp() {
+        XCTAssertTrue(isNoOp(current: .open, requested: .open, userInitiated: true))
+        XCTAssertTrue(isNoOp(current: .closed, requested: .closed, userInitiated: true))
+    }
+
+    func testUserRequestForOtherStateIsNotNoOp() {
+        XCTAssertFalse(isNoOp(current: .open, requested: .closed, userInitiated: true))
+    }
+
+    func testLaunchRestoreAlwaysApplies() {
+        XCTAssertFalse(isNoOp(current: .open, requested: .open, userInitiated: false))
     }
 
     // MARK: - restoredState

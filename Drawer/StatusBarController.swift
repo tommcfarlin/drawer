@@ -1,4 +1,5 @@
 import AppKit
+import QuartzCore
 import os
 
 /// Owns Drawer's three menu bar items, left to right: the `[` handle, the `]` wall,
@@ -18,6 +19,12 @@ final class StatusBarController: NSObject {
     private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
     /// How long to wait after closing before confirming the front is on screen.
     private static let frontCheckDelay: TimeInterval = 0.3
+
+    private let wallImage = StatusBarController.bracket(opening: false)
+    private let closedImageValue = StatusBarController.closedImage
+    /// Overlays that briefly stand in for the wall's and front's images while they bounce.
+    private let wallFace = NSImageView()
+    private let frontFace = NSImageView()
 
     private let handleItem: NSStatusItem
     private let wallItem: NSStatusItem
@@ -62,8 +69,15 @@ final class StatusBarController: NSObject {
         }
 
         handleItem.button?.image = Self.bracket(opening: true)
-        wallItem.button?.image = Self.bracket(opening: false)
-        frontItem.button?.image = Self.closedImage
+        wallItem.button?.image = wallImage
+        frontItem.button?.image = closedImageValue
+        for (face, item) in [(wallFace, wallItem), (frontFace, frontItem)] {
+            face.isHidden = true
+            face.wantsLayer = true
+            // Purely visual; the button already carries the label and help.
+            face.setAccessibilityElement(false)
+            item.button?.addSubview(face)
+        }
 
         restoreSavedState()
     }
@@ -111,6 +125,7 @@ final class StatusBarController: NSObject {
     /// left of the wall.
     @discardableResult
     func setState(_ newState: DrawerState, userInitiated: Bool = true) -> Bool {
+        guard !isNoOp(current: state, requested: newState, userInitiated: userInitiated) else { return true }
         let handleMinX = handleItem.button?.window?.frame.minX
         let wallMinX = wallItem.button?.window?.frame.minX
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
@@ -123,6 +138,12 @@ final class StatusBarController: NSObject {
         lastChangeWasUserInitiated = userInitiated
         apply(state)
         UserDefaults.standard.set(state.rawValue, forKey: Self.stateKey)
+        if userInitiated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+            switch state {
+            case .closed: bounce(frontItem, face: frontFace, image: closedImageValue, nativeSymbol: true)
+            case .open: bounce(wallItem, face: wallFace, image: wallImage, nativeSymbol: false)
+            }
+        }
         return true
     }
 
@@ -248,6 +269,60 @@ final class StatusBarController: NSObject {
                 return
             }
         }
+    }
+
+    // MARK: - Bounce
+
+    /// A quick bounce on the drawer's own icon: the archive box as it shuts, `]` as it
+    /// opens. Other apps' icons can't be animated, so the motion stays on Drawer's.
+    /// The button's image is swapped for a clear placeholder and an overlay for the
+    /// length of the bounce, then restored, so the resting state is exactly as before.
+    private func bounce(_ item: NSStatusItem, face: NSImageView, image: NSImage?, nativeSymbol: Bool) {
+        // Wait a turn so a just-shown item has been laid out.
+        DispatchQueue.main.async { [weak self] in
+            guard let self, let button = item.button, let image else { return }
+            face.image = image
+            face.frame = CGRect(
+                x: ((button.bounds.width - image.size.width) / 2).rounded(),
+                y: ((button.bounds.height - image.size.height) / 2).rounded(),
+                width: image.size.width,
+                height: image.size.height
+            )
+            // A clear image of the same size keeps the item's width; with no image the
+            // menu bar would shrink it and shift its neighbors for the bounce.
+            button.image = NSImage(size: image.size)
+            let placeholder = button.image
+            face.isHidden = false
+
+            if nativeSymbol {
+                face.addSymbolEffect(.bounce, options: .nonRepeating)
+            } else if let layer = face.layer {
+                layer.add(Self.bounceAnimation(for: face.bounds), forKey: "bounce")
+            }
+
+            DispatchQueue.main.asyncAfter(deadline: .now() + bounceDuration + 0.1) { [weak self] in
+                face.isHidden = true
+                face.removeAllSymbolEffects()
+                face.layer?.removeAnimation(forKey: "bounce")
+                // Only restore if nothing changed the item since.
+                if self != nil, button.image === placeholder { button.image = image }
+            }
+        }
+    }
+
+    /// Scales around the view's center (a layer-backed view's anchor is its corner).
+    private static func bounceAnimation(for bounds: CGRect) -> CAKeyframeAnimation {
+        let animation = CAKeyframeAnimation(keyPath: "transform")
+        animation.values = bounceScales.map { scale in
+            var t = CATransform3DMakeTranslation(bounds.midX, bounds.midY, 0)
+            t = CATransform3DScale(t, scale, scale, 1)
+            t = CATransform3DTranslate(t, -bounds.midX, -bounds.midY, 0)
+            return NSValue(caTransform3D: t)
+        }
+        animation.keyTimes = bounceKeyTimes.map { NSNumber(value: $0) }
+        animation.duration = bounceDuration
+        animation.timingFunctions = Array(repeating: CAMediaTimingFunction(name: .easeInEaseOut), count: bounceScales.count - 1)
+        return animation
     }
 
     // MARK: - Images
