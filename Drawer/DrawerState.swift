@@ -211,23 +211,45 @@ func worst(_ fits: [NotchFit]) -> NotchFit {
 }
 
 /// Dimmed lines for Drawer's menu (and, first line only, the tooltip) explaining what
-/// the notch is hiding. Empty when there's nothing to say.
-func notchHint(for fit: NotchFit) -> [String] {
+/// the notch is hiding. Empty when there's nothing to say. While the drawer is closed,
+/// the partly-hidden hint describes the open drawer (from the last measurement).
+func notchHint(for fit: NotchFit, drawerIsOpen: Bool = true) -> [String] {
     switch fit {
     case .allFit:
         return []
     case let .drawerPartlyHidden(visible):
+        if drawerIsOpen {
+            let count: String
+            switch visible {
+            case 0: count = String(localized: "No Drawer Icons Fit Beside the Notch")
+            case 1: count = String(localized: "Only the Icon Nearest ] Fits Beside the Notch")
+            default: count = String(localized: "Only the \(visible) Icons Nearest ] Fit Beside the Notch")
+            }
+            return [count, String(localized: "⌘-Drag Your Favorites Next to ]")]
+        }
         let count: String
         switch visible {
-        case 0: count = String(localized: "No Drawer Icons Fit Beside the Notch")
-        case 1: count = String(localized: "Only the Icon Nearest ] Fits Beside the Notch")
-        default: count = String(localized: "Only the \(visible) Icons Nearest ] Fit Beside the Notch")
+        case 0: count = String(localized: "When Open, No Drawer Icons Fit Beside the Notch")
+        case 1: count = String(localized: "When Open, Only the Icon Nearest ] Fits Beside the Notch")
+        default: count = String(localized: "When Open, Only the \(visible) Icons Nearest ] Fit Beside the Notch")
         }
-        return [count, String(localized: "⌘-Drag Your Favorites Next to ]")]
+        return [count, String(localized: "Open the Drawer and ⌘-Drag Your Favorites Next to ]")]
     case .outsideDoesNotFit:
         return [
             String(localized: "Too Many Icons Outside the Drawer to Fit Beside the Notch"),
             String(localized: "⌘-Drag Some Icons Into the Drawer"),
         ]
     }
+}
+
+/// Which notch result to explain. Only when a notched display is present. The
+/// outside-doesn't-fit warning always wins; otherwise an open drawer uses the current
+/// measurement and a closed one uses the last measurement taken while open (a closed
+/// drawer's icons are off-screen, so they can't be measured). `current` is nil when
+/// Drawer's items haven't been laid out yet; then the last open measurement stands in.
+func notchFitToExplain(hasNotch: Bool, state: DrawerState, current: NotchFit?, lastOpen: NotchFit?) -> NotchFit {
+    guard hasNotch else { return .allFit }
+    if current == .outsideDoesNotFit { return .outsideDoesNotFit }
+    if state == .open, let current { return current }
+    return lastOpen ?? .allFit
 }

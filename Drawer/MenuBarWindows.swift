@@ -15,6 +15,20 @@ enum MenuBarWindows {
     /// Wider layer-25 windows are menu bar backdrops, not items.
     private static let maxItemWidth: CGFloat = 300
 
+    /// Identifies the current set of notched displays and their sizes, so a remembered
+    /// measurement is only reused on the same setup.
+    static func notchedDisplaySignature() -> String {
+        NSScreen.screens
+            .filter { $0.auxiliaryTopRightArea != nil }
+            .compactMap { screen -> String? in
+                guard let id = screen.deviceDescription[NSDeviceDescriptionKey("NSScreenNumber")] as? CGDirectDisplayID,
+                      let right = screen.auxiliaryTopRightArea else { return nil }
+                return "\(id):\(Int(screen.frame.width))x\(Int(screen.frame.height)):\(Int(right.width))"
+            }
+            .sorted()
+            .joined(separator: ",")
+    }
+
     static func notchedDisplays() -> [NotchedDisplay] {
         let notched = NSScreen.screens.filter { $0.auxiliaryTopRightArea != nil }
         guard !notched.isEmpty,
