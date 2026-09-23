@@ -91,6 +91,12 @@ func frontPreferredPosition(wallPosition: CGFloat) -> CGFloat {
     wallPosition - 1
 }
 
+/// At launch, before anything can be measured, the front's position comes from the
+/// wall's saved one, if there is one.
+func seededFrontPosition(savedWallPosition: Double?) -> Double? {
+    savedWallPosition.map { Double(frontPreferredPosition(wallPosition: CGFloat($0))) }
+}
+
 // MARK: - Bounce
 
 /// How long the drawer icon's bounce lasts after opening or closing.

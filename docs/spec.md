@@ -49,7 +49,8 @@ A status item that's shown again with `isVisible = true` lands wherever its save
 - Positions are keyed `NSStatusItem Preferred Position <autosave name>` in Drawer's `UserDefaults`. Each value is the distance from the screen's right edge to the item's **right** edge (`preferredPosition(itemMaxX:screenMaxX:)`), and items are ordered by it: larger means further left. Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as `433`.
 - Positions only order reliably against other saved positions. If the wall has none yet (it has never been dragged), Drawer records where it already is, which doesn't move it.
 - The front's position is `frontPreferredPosition(wallPosition:)` = the wall's position − 1, which sorts it immediately right of the wall.
-- **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself, logs an error, and (for a close the user asked for) shows the menu with the notice "The Menu Bar Is Too Full to Close the Drawer".
+- **At launch:** the front is created before anything can be measured, so its position is seeded from the wall's saved position first (`seededFrontPosition`). Without one, macOS would insert it at the far left, where a closed wall pushes it off-screen.
+- **Safety net:** 0.3 s after every close, including a launch into the closed state, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself, logs an error, and (for a close the user asked for) shows the menu with the notice "The Menu Bar Is Too Full to Close the Drawer".
 
 This key is undocumented AppKit behavior. The safety net keeps a future macOS change from stranding the user.
 
@@ -186,6 +187,35 @@ The About panel mirrors `SpotifyNotificationsApp.aboutCredits` from Now Playing 
 log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 ```
 
+## Notch (0.2.0)
+
+### What happens
+
+On a notched display (`NSScreen.auxiliaryTopRightArea != nil`), status items only fit in the area right of the notch. macOS hides the overflow from the **left**. Measured on Tom's MacBook with the drawer open: the external display showed all 26 status item windows, and the MacBook showed 15. `[` and the leftmost drawer icons were hidden; `]` and everything right of it were visible.
+
+No permission-free fix can reveal hidden icons: the notch hides a leftmost run, and so does anything an app can do without permission (a stretched status item). The visible set is always a rightmost run. So 0.2.0 measures and explains; revealing icons is the opt-in drop-down (#29).
+
+### Measuring (no permissions)
+
+- **Windows per display:** `CGWindowListCopyWindowInfo([.optionAll])`, filtered to layer 25 (status items) and to windows inside the notched display's `CGDisplayBounds`. For each window it reads `x`, `width`, and `kCGWindowIsOnscreen`. Window names and owners aren't read (and on macOS 26 every owner is Control Center anyway).
+- **Finding Drawer's items on that display:** each display has its own copy of the menu bar, with items at the same distance from its right edge (observed ±2pt between copies). Drawer's in-process frames may come from any copy, so it converts them with `offsetFromRightEdge(itemMinX:screenMaxX:)` and back onto the notched display, then matches the nearest window within `notchTolerance` (3pt).
+- **`notchFit(items:handleMinX:wallMinX:tolerance:) -> NotchFit`** (pure):
+  - `.outsideDoesNotFit` if the wall (or, when closed, the front) has no on-screen window at its position.
+  - `.allFit` if the handle is on screen (the whole drawer is visible).
+  - `.drawerPartlyHidden(visible:)` otherwise, where `visible` counts on-screen windows between the handle and the wall.
+  - If the handle's or wall's position is unknown, `.allFit` (say nothing rather than something wrong).
+- **Across displays:** the worst result across notched displays; `.allFit` if there are none.
+
+### Hint
+
+`notchHint(for: NotchFit) -> [String]` (pure, localized) produces the dimmed lines listed in the PRD's **Notch** table.
+- `makeMenu` shows them at the top when there's no other notice (a refused or failed close takes priority).
+- The tooltip of `]` (or of the front, when closed) becomes the action title, a newline, and the first line.
+
+### When it's refreshed
+
+On every state change, each time the menu opens, and on `NSApplication.didChangeScreenParametersNotification`. There's no polling. A tooltip can be briefly stale after you ⌘-drag icons; opening the menu or changing state refreshes it.
+
 ## Persistence
 
 | Key | Store | Type | Default | Purpose |
@@ -200,7 +230,7 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 | Case | Behavior |
 |------|----------|
 | Handle dragged right of the wall | Closing is refused (beep); the drawer stays open |
-| Front doesn't land on screen after closing | Drawer reopens itself and logs an error |
+| Front doesn't land on screen after closing, or after launching closed | Drawer reopens itself and logs an error (explains only if the user clicked) |
 | macOS hides the front later (crowded menu bar, notch, System Settings → Menu Bar) | Opening Drawer again (`applicationShouldHandleReopen`) opens the drawer |
 | Icons left of the handle | Also hidden while closed (known limitation) |
 | Handle or wall removed from the menu bar (⌘-drag out) | Relaunching restores it, because `isVisible` is set to `true` at launch |
@@ -226,6 +256,8 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 
 ## Known issues
 
+- **Notch hint can be briefly stale:** it's refreshed on state changes, menu opens, and display changes, not while you ⌘-drag icons.
+
 - **AppKit layout warning at launch (low):** Release builds sometimes log once, from AppKit, *"It's not legal to call -layoutSubtreeIfNeeded on a view which is already being laid out."* It predates the bounce, appears during the system's own status item scene setup (alongside Control Center scene-client errors), and didn't reproduce under the debugger with a breakpoint on `_NSDetectedLayoutRecursion`. No visible effect. Revisit if it becomes reproducible.
 
 ## Security and privacy
@@ -245,13 +277,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (49):
+Unit tests (51):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- `seededFrontPosition`: follows the wall's saved position; nothing without one.
 - `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
 
