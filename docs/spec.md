@@ -92,6 +92,7 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 |--------|----------|
 | `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `menuActionTitle` ("Close Drawer" / "Open Drawer") |
 | `enum DrawerPart { handle, wall, front }` | `accessibilityLabel(for:)`; `accessibilityHelp(for: DrawerState)` |
+| `isNoOp(current:requested:userInitiated:)` | `true` when the user asks for the current state; launch restores always apply |
 | `clickAction(eventType:modifiers:)` | `.showMenu` for right-up or Control + left-up; otherwise `.toggle` |
 | `bracketSize`, `bracketRects(opening:scale:)` | Pixel-aligned rectangles for `[` / `]` |
 | `closedSymbolName` | `archivebox` |
@@ -121,9 +122,18 @@ All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMou
 
 Each button also has an `NSAccessibilityCustomAction` named "Show Menu", because VoiceOver can't right-click.
 
+### Bounce
+
+Opening and closing are instant; the motion is a quick bounce on Drawer's own icon, because other apps' icons can't be animated. (A slide was tried and dropped: the icons can only be pushed along the menu bar, so they crossed the whole bar, app menus included, and the menu bar re-laid out every frame.)
+
+- **Close:** the archive box bounces with SF Symbols' native `.bounce` effect (`NSImageView.addSymbolEffect`).
+- **Open:** `]` bounces with a Core Animation scale keyframe (`bounceScales` 1 → 0.82 → 1.1 → 1 over `bounceDuration`, 0.35 s), since SF Symbols has no bracket and symbol effects only work on symbol images.
+- For the bounce, the button's image is swapped for a clear placeholder of the same size plus an `NSImageView` overlay, then restored. Clearing the image instead would shrink the item to the menu bar's 16pt minimum and shift its neighbors.
+- Only for user-initiated changes, and skipped when Reduce Motion is on. Launch restores and safety-net reopens don't bounce.
+
 ### Reopening from outside
 
-`AppDelegate.applicationShouldHandleReopen` opens the drawer whenever Drawer is opened again while running. This is the way back if macOS hides the archive box later (a crowded menu bar, the notch, or System Settings → Menu Bar).
+`AppDelegate.applicationShouldHandleReopen` opens the drawer whenever Drawer is opened again while running. If it's already open, nothing happens (`isNoOp`), so there's no bounce either. This is the way back if macOS hides the archive box later (a crowded menu bar, the notch, or System Settings → Menu Bar).
 
 ### Opening and closing
 
@@ -214,6 +224,10 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 - The built app bundles `en.lproj/Localizable.strings`. No other languages yet.
 - Unit tests run outside the app bundle, so lookups fall back to the English keys, which the tests assert.
 
+## Known issues
+
+- **AppKit layout warning at launch (low):** Release builds sometimes log once, from AppKit, *"It's not legal to call -layoutSubtreeIfNeeded on a view which is already being laid out."* It predates the bounce, appears during the system's own status item scene setup (alongside Control Center scene-client errors), and didn't reproduce under the debugger with a breakpoint on `_NSDetectedLayoutRecursion`. No visible effect. Revisit if it becomes reproducible.
+
 ## Security and privacy
 
 - App Sandbox on, with no extra entitlements.
@@ -231,12 +245,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (43):
+Unit tests (49):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
+- Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
 
 Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
@@ -258,6 +274,7 @@ Manual QA checklist:
 - With the drawer closed, open Drawer again: the drawer opens.
 - VoiceOver: distinct labels, VO-Space toggles, VO-Command-Space → Show Menu.
 - On a 1x display the brackets look as crisp as neighboring SF Symbols.
+- Closing: the archive box bounces. Opening: `]` bounces. Neither shifts neighboring icons; with Reduce Motion on, neither bounces.
 - Light and dark menu bar, and a tinted/transparent menu bar: `[`, `]`, and the archive box stay legible and match neighboring icons.
 - Intel and Apple silicon builds run.
 
