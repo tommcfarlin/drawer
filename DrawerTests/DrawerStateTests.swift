@@ -360,4 +360,15 @@ final class DrawerStateTests: XCTestCase {
     func testHintWhenNoDrawerIconsFit() {
         XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 0)).first, "No Drawer Icons Fit Beside the Notch")
     }
+
+    func testWarningWhenOutsideDoesNotFit() {
+        XCTAssertEqual(notchHint(for: .outsideDoesNotFit), [
+            "Too Many Icons Outside the Drawer to Fit Beside the Notch",
+            "⌘-Drag Some Icons Into the Drawer",
+        ])
+    }
+
+    func testWarningOutranksPartlyHidden() {
+        XCTAssertEqual(worst([.drawerPartlyHidden(visible: 3), .outsideDoesNotFit, .allFit]), .outsideDoesNotFit)
+    }
 }

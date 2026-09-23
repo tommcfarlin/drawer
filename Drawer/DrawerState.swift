@@ -225,6 +225,9 @@ func notchHint(for fit: NotchFit) -> [String] {
         }
         return [count, String(localized: "⌘-Drag Your Favorites Next to ]")]
     case .outsideDoesNotFit:
-        return []
+        return [
+            String(localized: "Too Many Icons Outside the Drawer to Fit Beside the Notch"),
+            String(localized: "⌘-Drag Some Icons Into the Drawer"),
+        ]
     }
 }
