@@ -1,6 +1,6 @@
 # Drawer
 
-A macOS menu bar app that hides icons left of a divider. The product is described in `docs/prd.md` and the technical design in `docs/spec.md`; read both before starting an issue.
+A macOS menu bar app with a `[ … |` drawer: icons inside it hide when the drawer closes. The product is described in `docs/prd.md` and the technical design in `docs/spec.md`; read both before starting an issue.
 
 ## Command line only
 
@@ -44,9 +44,12 @@ Every issue has:
 ## Architecture
 
 - SwiftUI `App` entry point with `NSApplicationDelegateAdaptor`; no windows, `LSUIElement = YES`
-- AppKit `NSStatusItem`s (not `MenuBarExtra`): a chevron toggle and a `|` divider
-- Collapsing sets the divider's length to 10,000pt, which pushes items to its left off-screen
-- State is persisted in `UserDefaults` under `drawerState`
+- AppKit `NSStatusItem`s (not `MenuBarExtra`), left to right: `[` handle, `|` wall, front (shows `[|` when closed)
+- Icons between the handle and the wall are in the drawer. Closing sets the wall's length to 10,000pt, which pushes it, the handle, and everything left of it off-screen; the front then shows `[|`
+- A stretched item is moved entirely off-screen by macOS, so it can never be the one showing `[|`; see `docs/spec.md` → How hiding works
+- The menu bar reports placeholder frames for ~250 ms after launch; restoring a closed drawer waits for positions to settle
+- State is persisted in `UserDefaults` under `drawerState` (`open` / `closed`)
+- The menu bar can't be clicked from the command line (no Accessibility access); verify layout with `CGWindowListCopyWindowInfo` and ask Tom to click-test
 - Minimum macOS 26; universal binary; sandboxed; no permissions; no network
 
 ## Signing
