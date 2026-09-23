@@ -51,6 +51,7 @@ targets:
     # Standalone (non-hosted): pure-logic sources are compiled directly into the test bundle.
     sources:
       - path: DrawerTests
+      - path: Drawer/DrawerState.swift
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: co.pressware.drawer.tests
