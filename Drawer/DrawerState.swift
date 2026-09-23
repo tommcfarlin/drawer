@@ -209,3 +209,22 @@ func worst(_ fits: [NotchFit]) -> NotchFit {
     }
     return partly.min().map { .drawerPartlyHidden(visible: $0) } ?? .allFit
 }
+
+/// Dimmed lines for Drawer's menu (and, first line only, the tooltip) explaining what
+/// the notch is hiding. Empty when there's nothing to say.
+func notchHint(for fit: NotchFit) -> [String] {
+    switch fit {
+    case .allFit:
+        return []
+    case let .drawerPartlyHidden(visible):
+        let count: String
+        switch visible {
+        case 0: count = String(localized: "No Drawer Icons Fit Beside the Notch")
+        case 1: count = String(localized: "Only the Icon Nearest ] Fits Beside the Notch")
+        default: count = String(localized: "Only the \(visible) Icons Nearest ] Fit Beside the Notch")
+        }
+        return [count, String(localized: "⌘-Drag Your Favorites Next to ]")]
+    case .outsideDoesNotFit:
+        return []
+    }
+}
