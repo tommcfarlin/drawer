@@ -51,6 +51,10 @@
     "Open Drawer": {
       "extractionState": "manual"
     },
+    "Open the Drawer and ⌘-Drag Your Favorites Next to ]": {
+      "comment": "Notch hint while closed: suggestion",
+      "extractionState": "manual"
+    },
     "Pressware": {
       "comment": "Company name",
       "extractionState": "manual"
@@ -72,6 +76,18 @@
     },
     "Too Many Icons Outside the Drawer to Fit Beside the Notch": {
       "comment": "Notch warning: the icons right of ] don't fit beside the MacBook notch",
+      "extractionState": "manual"
+    },
+    "When Open, No Drawer Icons Fit Beside the Notch": {
+      "comment": "Notch hint while closed: none of the drawer's icons fit beside the notch when open",
+      "extractionState": "manual"
+    },
+    "When Open, Only the %lld Icons Nearest ] Fit Beside the Notch": {
+      "comment": "Notch hint while closed: how many drawer icons fit beside the notch when open",
+      "extractionState": "manual"
+    },
+    "When Open, Only the Icon Nearest ] Fits Beside the Notch": {
+      "comment": "Notch hint while closed: one drawer icon fits when open",
       "extractionState": "manual"
     },
     "⌘-Drag Some Icons Into the Drawer": {
