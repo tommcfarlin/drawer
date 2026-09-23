@@ -1,0 +1,63 @@
+{
+  "sourceLanguage": "en",
+  "strings": {
+    "About Drawer": {
+      "extractionState": "manual"
+    },
+    "Click to close the drawer.": {
+      "extractionState": "manual"
+    },
+    "Click to open the drawer.": {
+      "extractionState": "manual"
+    },
+    "Close Drawer": {
+      "extractionState": "manual"
+    },
+    "Closed drawer": {
+      "extractionState": "manual"
+    },
+    "Contact": {
+      "extractionState": "manual"
+    },
+    "Drawer": {
+      "comment": "App name",
+      "extractionState": "manual"
+    },
+    "Drawer, left edge": {
+      "extractionState": "manual"
+    },
+    "Drawer, right edge": {
+      "extractionState": "manual"
+    },
+    "How to Use Drawer…": {
+      "extractionState": "manual"
+    },
+    "Move [ to the Left of ] to Use the Drawer": {
+      "comment": "Shown when the drawer can't close because [ is right of ]",
+      "extractionState": "manual"
+    },
+    "Open Drawer": {
+      "extractionState": "manual"
+    },
+    "Pressware": {
+      "comment": "Company name",
+      "extractionState": "manual"
+    },
+    "Quit Drawer": {
+      "extractionState": "manual"
+    },
+    "Show Menu": {
+      "comment": "Accessibility action that opens the drawer menu",
+      "extractionState": "manual"
+    },
+    "The Menu Bar Is Too Full to Close the Drawer": {
+      "comment": "Shown when the drawer reopens itself because the closed drawer couldn't appear",
+      "extractionState": "manual"
+    },
+    "Throw your menu bar icons into a drawer. Pull them out when you need them.": {
+      "comment": "Tagline in the About panel",
+      "extractionState": "manual"
+    }
+  },
+  "version": "1.0"
+}
