@@ -196,6 +196,7 @@ final class StatusBarController: NSObject {
         for (part, item) in parts {
             item.button?.setAccessibilityLabel(accessibilityLabel(for: part))
             item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
+            item.button?.toolTip = state.menuActionTitle
         }
     }
 
