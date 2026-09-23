@@ -49,7 +49,8 @@ A status item that's shown again with `isVisible = true` lands wherever its save
 - Positions are keyed `NSStatusItem Preferred Position <autosave name>` in Drawer's `UserDefaults`. Each value is the distance from the screen's right edge to the item's **right** edge (`preferredPosition(itemMaxX:screenMaxX:)`), and items are ordered by it: larger means further left. Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as `433`.
 - Positions only order reliably against other saved positions. If the wall has none yet (it has never been dragged), Drawer records where it already is, which doesn't move it.
 - The front's position is `frontPreferredPosition(wallPosition:)` = the wall's position − 1, which sorts it immediately right of the wall.
-- **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself, logs an error, and (for a close the user asked for) shows the menu with the notice "The Menu Bar Is Too Full to Close the Drawer".
+- **At launch:** the front is created before anything can be measured, so its position is seeded from the wall's saved position first (`seededFrontPosition`). Without one, macOS would insert it at the far left, where a closed wall pushes it off-screen.
+- **Safety net:** 0.3 s after every close, including a launch into the closed state, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself, logs an error, and (for a close the user asked for) shows the menu with the notice "The Menu Bar Is Too Full to Close the Drawer".
 
 This key is undocumented AppKit behavior. The safety net keeps a future macOS change from stranding the user.
 
@@ -200,7 +201,7 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 | Case | Behavior |
 |------|----------|
 | Handle dragged right of the wall | Closing is refused (beep); the drawer stays open |
-| Front doesn't land on screen after closing | Drawer reopens itself and logs an error |
+| Front doesn't land on screen after closing, or after launching closed | Drawer reopens itself and logs an error (explains only if the user clicked) |
 | macOS hides the front later (crowded menu bar, notch, System Settings → Menu Bar) | Opening Drawer again (`applicationShouldHandleReopen`) opens the drawer |
 | Icons left of the handle | Also hidden while closed (known limitation) |
 | Handle or wall removed from the menu bar (⌘-drag out) | Relaunching restores it, because `isVisible` is set to `true` at launch |
@@ -245,13 +246,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (49):
+Unit tests (51):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- `seededFrontPosition`: follows the wall's saved position; nothing without one.
 - `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
 
