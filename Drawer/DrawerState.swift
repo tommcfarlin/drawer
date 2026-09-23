@@ -91,6 +91,16 @@ func frontPreferredPosition(wallPosition: CGFloat) -> CGFloat {
     wallPosition - 1
 }
 
+// MARK: - Bounce
+
+/// How long the drawer icon's bounce lasts after opening or closing.
+let bounceDuration: TimeInterval = 0.35
+
+/// Scale keyframes for the `]` bounce: a quick squash, a small overshoot, then rest,
+/// approximating SF Symbols' bounce (which only works on symbol images).
+let bounceScales: [CGFloat] = [1, 0.82, 1.1, 1]
+let bounceKeyTimes: [Double] = [0, 0.3, 0.7, 1]
+
 /// Closing only makes sense when the handle is left of the wall.
 /// If either position is unknown, don't close.
 func canClose(handleMinX: CGFloat?, wallMinX: CGFloat?) -> Bool {
