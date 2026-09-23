@@ -87,6 +87,28 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertFalse(canClose(handleMinX: nil, wallMinX: nil))
     }
 
+    // MARK: - clickAction
+
+    func testRightClickShowsMenu() {
+        XCTAssertEqual(clickAction(eventType: .rightMouseUp, modifiers: []), .showMenu)
+    }
+
+    func testControlClickShowsMenu() {
+        XCTAssertEqual(clickAction(eventType: .leftMouseUp, modifiers: .control), .showMenu)
+    }
+
+    func testLeftClickToggles() {
+        XCTAssertEqual(clickAction(eventType: .leftMouseUp, modifiers: []), .toggle)
+    }
+
+    func testPressWithoutEventToggles() {
+        XCTAssertEqual(clickAction(eventType: nil, modifiers: []), .toggle)
+    }
+
+    func testKeyboardPressToggles() {
+        XCTAssertEqual(clickAction(eventType: .keyDown, modifiers: []), .toggle)
+    }
+
     // MARK: - restoredState
 
     func testRestoredStateDefaultsToOpenWhenMissing() {

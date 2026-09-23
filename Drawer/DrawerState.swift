@@ -51,6 +51,25 @@ func isPlaced(_ frame: CGRect, on screens: [CGRect]) -> Bool {
     return screens.contains { $0.contains(frame) }
 }
 
+/// What a press on a drawer item should do.
+enum ClickAction: Equatable {
+    case toggle
+    case showMenu
+}
+
+/// Only a right-click, or a Control-click, shows the menu. Anything else, including
+/// a press from VoiceOver or the keyboard that has no mouse event, toggles the drawer.
+func clickAction(eventType: NSEvent.EventType?, modifiers: NSEvent.ModifierFlags) -> ClickAction {
+    switch eventType {
+    case .rightMouseUp:
+        return .showMenu
+    case .leftMouseUp where modifiers.contains(.control):
+        return .showMenu
+    default:
+        return .toggle
+    }
+}
+
 /// Default for first launch (or an unrecognized saved value) is open.
 func restoredState(from rawValue: String?) -> DrawerState {
     rawValue.flatMap(DrawerState.init(rawValue:)) ?? .open
