@@ -51,7 +51,7 @@ final class StatusBarController: NSObject {
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
             // VoiceOver can't right-click, so offer the menu as a custom action.
             button.setAccessibilityCustomActions([
-                NSAccessibilityCustomAction(name: "Show Menu") { [weak self, weak item] in
+                NSAccessibilityCustomAction(name: String(localized: "Show Menu")) { [weak self, weak item] in
                     guard let self, let item else { return false }
                     self.showMenu(from: item)
                     return true
@@ -150,7 +150,7 @@ final class StatusBarController: NSObject {
         NSWorkspace.shared.open(Self.helpURL)
     }
 
-    private static let misplacedHandleNotice = "Move [ to the Left of ] to Use the Drawer"
+    private static let misplacedHandleNotice = String(localized: "Move [ to the Left of ] to Use the Drawer")
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
     private func showMenu(from item: NSStatusItem, notice: String? = nil) {
@@ -177,15 +177,15 @@ final class StatusBarController: NSObject {
         menu.addItem(toggle)
         menu.addItem(.separator())
 
-        let help = NSMenuItem(title: "How to Use Drawer…", action: #selector(showHelp), keyEquivalent: "")
+        let help = NSMenuItem(title: String(localized: "How to Use Drawer…"), action: #selector(showHelp), keyEquivalent: "")
         help.target = self
         menu.addItem(help)
 
-        let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
+        let about = NSMenuItem(title: String(localized: "About Drawer"), action: #selector(showAbout), keyEquivalent: "")
         about.target = self
         menu.addItem(about)
         menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        let quit = NSMenuItem(title: String(localized: "Quit Drawer"), action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         quit.target = NSApp
         menu.addItem(quit)
         return menu
@@ -258,7 +258,7 @@ final class StatusBarController: NSObject {
 
     private static var closedImage: NSImage? {
         let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
-        let image = NSImage(systemSymbolName: closedSymbolName, accessibilityDescription: "Drawer")?
+        let image = NSImage(systemSymbolName: closedSymbolName, accessibilityDescription: String(localized: "Closed drawer"))?
             .withSymbolConfiguration(config)
         image?.isTemplate = true
         return image
@@ -267,7 +267,7 @@ final class StatusBarController: NSObject {
     @objc private func showAbout() {
         NSApp.activate()
         NSApp.orderFrontStandardAboutPanel(options: [
-            .applicationName: "Drawer",
+            .applicationName: String(localized: "Drawer", comment: "App name"),
             .applicationIcon: NSApp.applicationIconImage as Any,
             .credits: Self.aboutCredits,
         ])
@@ -291,12 +291,12 @@ final class StatusBarController: NSObject {
 
         let credits = NSMutableAttributedString()
         credits.append(NSAttributedString(
-            string: "Throw your menu bar icons into a drawer. Pull them out when you need them.\n\n",
+            string: String(localized: "Throw your menu bar icons into a drawer. Pull them out when you need them.") + "\n\n",
             attributes: attributes
         ))
-        credits.append(link("Pressware", "https://pressware.co?ref=drawer"))
+        credits.append(link(String(localized: "Pressware", comment: "Company name"), "https://pressware.co?ref=drawer"))
         credits.append(NSAttributedString(string: " · ", attributes: attributes))
-        credits.append(link("Contact", "mailto:support@pressware.co"))
+        credits.append(link(String(localized: "Contact"), "mailto:support@pressware.co"))
         return credits
     }
 }
