@@ -22,7 +22,6 @@ final class StatusBarController: NSObject {
     private let handleItem: NSStatusItem
     private let wallItem: NSStatusItem
     private let frontItem: NSStatusItem
-    private let menu = NSMenu()
     private(set) var state: DrawerState = .open
 
     override init() {
@@ -59,13 +58,6 @@ final class StatusBarController: NSObject {
                 },
             ])
         }
-
-        let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
-        about.target = self
-        menu.addItem(about)
-        menu.addItem(.separator())
-        let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
-        menu.addItem(quit)
 
         handleItem.button?.image = Self.bracket(opening: true)
         wallItem.button?.image = Self.bracket(opening: false)
@@ -109,36 +101,68 @@ final class StatusBarController: NSObject {
         check()
     }
 
-    func setState(_ newState: DrawerState, beepIfRefused: Bool = true) {
+    /// Returns whether the change happened. Closing is refused if the handle isn't
+    /// left of the wall.
+    @discardableResult
+    func setState(_ newState: DrawerState, beepIfRefused: Bool = true) -> Bool {
         let handleMinX = handleItem.button?.window?.frame.minX
         let wallMinX = wallItem.button?.window?.frame.minX
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
         if newState == .closed, !canClose(handleMinX: handleMinX, wallMinX: wallMinX) {
             Self.log.notice("Refused to close: the handle is not left of the wall")
             if beepIfRefused { NSSound.beep() }
-            return
+            return false
         }
         state = newState
         apply(state)
         UserDefaults.standard.set(state.rawValue, forKey: Self.stateKey)
+        return true
     }
 
     @objc private func itemClicked(_ sender: NSStatusBarButton) {
+        let item = [handleItem, wallItem, frontItem].first { $0.button === sender } ?? wallItem
         let event = NSApp.currentEvent
         switch clickAction(eventType: event?.type, modifiers: event?.modifierFlags ?? []) {
         case .showMenu:
-            let item = [handleItem, wallItem, frontItem].first { $0.button === sender } ?? wallItem
             showMenu(from: item)
         case .toggle:
-            setState(state.toggled)
+            if !setState(state.toggled) {
+                // A beep alone is easy to miss; say why, right where they clicked.
+                showMenu(from: item, notice: Self.misplacedHandleNotice)
+            }
         }
     }
 
+    private static let misplacedHandleNotice = "Move [ to the Left of ] to Use the Drawer"
+
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
-    private func showMenu(from item: NSStatusItem) {
-        item.menu = menu
+    private func showMenu(from item: NSStatusItem, notice: String? = nil) {
+        item.menu = makeMenu(notice: notice)
         item.button?.performClick(nil)
         item.menu = nil
+    }
+
+    /// Built each time it opens so its contents can reflect the current state.
+    /// A notice, if given, appears first as a dimmed, unclickable line.
+    private func makeMenu(notice: String?) -> NSMenu {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        if let notice {
+            let line = NSMenuItem(title: notice, action: nil, keyEquivalent: "")
+            line.isEnabled = false
+            menu.addItem(line)
+            menu.addItem(.separator())
+        }
+
+        let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        quit.target = NSApp
+        menu.addItem(quit)
+        return menu
     }
 
     private func apply(_ state: DrawerState) {
