@@ -176,6 +176,7 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 |------|----------|
 | Handle dragged right of the wall | Closing is refused (beep); the drawer stays open |
 | Front doesn't land on screen after closing | Drawer reopens itself and logs an error |
+| macOS hides the front later (crowded menu bar, notch, System Settings → Menu Bar) | Opening Drawer again (`applicationShouldHandleReopen`) opens the drawer |
 | Icons left of the handle | Also hidden while closed (known limitation) |
 | Handle or wall removed from the menu bar (⌘-drag out) | Relaunching restores it, because `isVisible` is set to `true` at launch |
 | Display added/removed, resolution change | No action needed |
