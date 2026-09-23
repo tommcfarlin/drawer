@@ -56,7 +56,6 @@ Every issue has:
 - The right-click menu is rebuilt each time it opens (`makeMenu(notice:)`); refused or failed closes are explained with a dimmed notice line, never a beep alone
 - All user-facing text goes through `String(localized:)` and `Drawer/Localizable.xcstrings`; add new strings to the catalog
 - Menu bar images are template images; custom ones must be pixel-aligned (see `bracketRects`)
-- Notch (0.2.0): measured without permissions from the window list per display; the hint is passive (menu and tooltip only). Never open or close the drawer automatically. Revealing hidden icons needs Accessibility (#29, opt-in)
 - Minimum macOS 26; universal binary; sandboxed; no permissions; no network
 
 ## Signing

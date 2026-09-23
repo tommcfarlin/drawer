@@ -155,16 +155,6 @@ final class DrawerStateTests: XCTestCase {
         }
     }
 
-    // MARK: - seededFrontPosition
-
-    func testSeededFrontPositionFollowsSavedWall() {
-        XCTAssertEqual(seededFrontPosition(savedWallPosition: 433), 432)
-    }
-
-    func testNoSeedWithoutSavedWall() {
-        XCTAssertNil(seededFrontPosition(savedWallPosition: nil))
-    }
-
     // MARK: - bounce
 
     func testBounceStartsAndEndsAtRest() {

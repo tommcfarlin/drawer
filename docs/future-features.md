@@ -1,14 +1,15 @@
 # Future Features
 
-Ideas not yet scheduled. Each becomes a GitHub issue in the `Future State` milestone.
+Ideas deferred from 0.1.0. Each should become a GitHub issue once the repo exists.
 
-## Opt-in drop-down for icons hidden by the notch (#29)
+## Notch awareness
 
-0.2.0 tells you how many drawer icons fit beside the notch, but can't show the hidden ones: that needs Accessibility permission. The plan:
+On MacBooks with a notch, macOS silently hides status items that don't fit between the app menus and the notch. Users may think Drawer hid them, or that Drawer is broken.
 
-- A `»` item appears when icons are hidden by the notch. Clicking it lists them with each app's icon and name (from `NSRunningApplication`, so no Screen Recording). Clicking one opens that app's real menu.
-- Accessibility is requested once, the first time `»` is clicked, never before.
-- It starts with a proof of concept on Tom's Mac: list hidden items, map them to apps, and open a menu whose icon is behind the notch (possibly by moving it into view briefly, as Ice does). If opening menus doesn't work, fall back to a list that opens each app.
+Possible directions:
+
+- Detect a notched display (`NSScreen.safeAreaInsets` / `auxiliaryTopLeftArea`) and document the behavior.
+- Warn when the icons outside the drawer are likely to overflow into the notch.
 
 ## Other candidates (not committed)
 
