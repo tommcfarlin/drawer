@@ -1,6 +1,7 @@
 name: Drawer
 options:
   bundleIdPrefix: co.pressware
+  developmentLanguage: en
   deploymentTarget:
     macOS: "26.0"
   createIntermediateGroups: true
@@ -40,6 +41,8 @@ targets:
         ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
         ARCHS: $(ARCHS_STANDARD)
         COMBINE_HIDPI_IMAGES: YES
+        SWIFT_EMIT_LOC_STRINGS: YES
+        LOCALIZATION_PREFERS_STRING_CATALOGS: YES
       configs:
         Release:
           # Don't add the debugging entitlement (get-task-allow) to Release builds.
