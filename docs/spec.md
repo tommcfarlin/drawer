@@ -21,7 +21,7 @@ Companion to [prd.md](prd.md). Describes how Drawer 0.1.0 is built.
 
 Now Playing on Spotify uses SwiftUI's `MenuBarExtra`. Drawer can't, because it needs:
 
-- two status items whose relative position matters,
+- several status items whose relative position matters,
 - direct control of a status item's `length`,
 - different behavior for left-click and right-click.
 
@@ -29,14 +29,28 @@ Now Playing on Spotify uses SwiftUI's `MenuBarExtra`. Drawer can't, because it n
 
 ## How hiding works
 
-macOS lays status items out right-to-left, and it drops items that don't fit in the space available. Drawer uses this:
+macOS lays status items out right-to-left and drops items that don't fit. Drawer uses three status items, left to right:
 
-1. A **divider** status item sits to the left of the **toggle**.
-2. **Expanded:** the divider has `variableLength` and shows `|`.
-3. **Collapsed:** the divider's `length` is set to a very large value (`10_000`). It becomes an invisible, extremely wide item, and everything to its left is pushed past the edge of the screen, so macOS doesn't draw it.
-4. System items (Control Center, clock, and so on) and anything to the right of the toggle are unaffected.
+| Item | Autosave name | Open | Closed |
+|------|---------------|------|--------|
+| Handle | `DrawerHandle` | `[` | Pushed off-screen |
+| Wall | `DrawerWall` | `\|` | Stretched to `10_000`pt, off-screen |
+| Front | `DrawerFront` | Length `0`, button hidden | `[\|` |
 
-This technique uses only public API and needs no permissions. It is the same approach used by Vanilla and Hidden Bar.
+1. Everything between the handle and the wall is **in the drawer**.
+2. **Closing** sets the wall's `length` to `10_000`. macOS pushes it, the handle, and every item to its left past the left edge of the screen, and doesn't draw them.
+3. The **front**, which sits just right of the wall, becomes visible and shows `[|`, so the shut drawer appears in place.
+4. Items right of the front (system items, and anything the user dragged right of `|`) are unaffected.
+
+Findings that shaped this design (macOS 26):
+
+- An item stretched that wide is moved entirely off-screen (it's clamped to about 5,016pt and placed at a negative x), so **the stretched item can never be the one that shows `[|`**. That's why the front is a separate item.
+- Every status item keeps a minimum width of about 16pt, even at length `0` with a hidden button. So while open, there's a small gap just right of `|`.
+- Setting `isVisible = false` on the front while open doesn't work: when it's shown again, macOS inserts it at the far left, which is off-screen while closed.
+
+This technique uses only public API and needs no permissions. It's the same basic approach used by Vanilla and Hidden Bar.
+
+**Limitation:** anything left of the handle is also pushed off-screen when the drawer closes. The README explains this.
 
 ## Files
 
@@ -45,11 +59,12 @@ This technique uses only public API and needs no permissions. It is the same app
 | `project.yml` | XcodeGen spec: app target, test target, signing, build settings |
 | `Makefile` | `make project`, `make build`, `make test`, `make run`, `make icon`, `make clean` |
 | `scripts/make-icon.swift` | Renders 🗄️ to a 1024×1024 PNG; `make icon` then fills the `AppIcon.appiconset` sizes with `sips` |
+| `scripts/AppIcon.Contents.json` | `Contents.json` copied into the icon set by `make icon` |
 | `Drawer/DrawerApp.swift` | `@main` SwiftUI `App`; `NSApplicationDelegateAdaptor`; an empty `Settings` scene |
 | `Drawer/AppDelegate.swift` | Creates `StatusBarController` on launch |
-| `Drawer/StatusBarController.swift` | Owns both status items, handles clicks, applies state, right-click menu, About panel |
-| `Drawer/DrawerState.swift` | Pure, testable logic (state enum, symbol names, lengths, collapse guard) |
-| `Drawer/Info.plist` | `LSUIElement = YES`; `CFBundleShortVersionString = 0.1.0` |
+| `Drawer/StatusBarController.swift` | Owns the three status items, handles clicks, applies state, restores state at launch, right-click menu, About panel |
+| `Drawer/DrawerState.swift` | Pure, testable logic (state, titles, lengths, close guard, placement check) |
+| `Drawer/Info.plist` | `LSUIElement = YES`; version from build settings; copyright |
 | `Drawer/Assets.xcassets/AppIcon.appiconset` | App icon rendered from the 🗄️ emoji at every required size (16–1024 px) |
 | `Drawer/Drawer.entitlements` | `com.apple.security.app-sandbox = YES` (nothing else) |
 | `Drawer/PrivacyInfo.xcprivacy` | Declares `UserDefaults` access (`CA92.1`), no tracking, no collected data |
@@ -58,96 +73,52 @@ This technique uses only public API and needs no permissions. It is the same app
 
 These live at file scope, or as a value type, so the non-hosted test target can compile them directly (same pattern as Now Playing on Spotify).
 
-```swift
-enum DrawerState: String {
-    case expanded
-    case collapsed
-
-    var toggled: DrawerState { self == .expanded ? .collapsed : .expanded }
-
-    /// SF Symbol for the toggle; points the direction the next click moves icons.
-    var toggleSymbolName: String { self == .expanded ? "chevron.right" : "chevron.left" }
-
-    var accessibilityLabel: String {
-        self == .expanded ? "Collapse menu bar icons" : "Expand menu bar icons"
-    }
-}
-
-let dividerCollapsedLength: CGFloat = 10_000
-
-func dividerLength(for state: DrawerState) -> CGFloat {
-    state == .collapsed ? dividerCollapsedLength : NSStatusItem.variableLength
-}
-
-/// Collapsing is only safe when the divider is left of the toggle.
-/// If either position is unknown, don't collapse.
-func canCollapse(dividerMinX: CGFloat?, toggleMinX: CGFloat?) -> Bool {
-    guard let d = dividerMinX, let t = toggleMinX else { return false }
-    return d < t
-}
-
-/// Default for first launch is expanded.
-func restoredState(from rawValue: String?) -> DrawerState {
-    rawValue.flatMap(DrawerState.init(rawValue:)) ?? .expanded
-}
-```
+| Symbol | Behavior |
+|--------|----------|
+| `enum DrawerState: String { case open, closed }` | `toggled`; `wallTitle` (`\|` / empty); `frontTitle` (empty / `[\|`); `accessibilityLabel` ("Close drawer" / "Open drawer") |
+| `handleTitle` | `[` |
+| `wallClosedLength` | `10_000` |
+| `wallLength(for:)` | Closed: `10_000`. Open: `variableLength`. |
+| `frontLength(for:)` | Closed: `variableLength`. Open: `0`. |
+| `canClose(handleMinX:wallMinX:)` | `true` only if both are known and the handle is strictly left of the wall |
+| `isPlaced(_:on:)` | `true` if the frame has size and sits entirely inside one of the screens |
+| `restoredState(from:)` | Saved raw value, or `.open` if it's missing or unrecognized |
 
 ## `StatusBarController`
 
-### Creation order and positions
+### Creation
 
-- New status items are inserted to the **left** of existing ones. Create the **toggle first**, then the **divider**, so the divider starts to the left of the toggle.
-- Set `autosaveName` on both (`"DrawerToggle"`, `"DrawerDivider"`) so macOS remembers where the user drags them.
-- On first launch, both items appear at the left end of the status area, to the left of every existing third-party icon. That puts all existing icons on the *visible* side. This is intended: the user chooses what to hide by ⌘-dragging icons left of the divider (see README).
+- New status items are inserted to the **left** of existing ones, so create them right to left: **front**, then **wall**, then **handle**.
+- Set each item's `autosaveName` so macOS remembers where the user drags them, and set `isVisible = true`.
+- On first launch the three items appear at the left end of the status area. The user drags icons in between `[` and `|`.
+- Each title uses `NSFont.menuBarFont(ofSize: 0)`.
 
-### Toggle item
+### Clicks
 
-```swift
-toggleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-toggleItem.autosaveName = "DrawerToggle"
-toggleItem.button?.target = self
-toggleItem.button?.action = #selector(toggleClicked(_:))
-toggleItem.button?.sendAction(on: [.leftMouseUp, .rightMouseUp])
-```
+All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMouseUp])`:
 
-- Image: `NSImage(systemSymbolName:accessibilityDescription:)`, with `isTemplate = true` so it adapts to light, dark, and tinted menu bars.
-- `toggleClicked`: read `NSApp.currentEvent`. A `.rightMouseUp` (or a left click with Control held) shows the menu; otherwise it toggles.
+- A right-click, or a left-click with Control held, shows the menu anchored to the clicked item.
+- Any other click toggles the drawer.
 
-### Divider item
+### Opening and closing
 
-```swift
-dividerItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-dividerItem.autosaveName = "DrawerDivider"
-dividerItem.button?.title = "|"
-dividerItem.button?.appearsDisabled = true   // dimmed, secondary look
-dividerItem.button?.setAccessibilityLabel("Drawer divider")
-```
+`setState(_:beepIfRefused:)`:
 
-- The divider has no action; clicking it does nothing.
-- **Collapsed:** set `length = dividerCollapsedLength` and set `button.title` to `""`.
-- **Expanded:** set `length = NSStatusItem.variableLength` and set `button.title` to `"|"`.
+1. When closing, check `canClose` against the handle's and wall's `button.window.frame.minX`. If it fails, log it, beep (unless told not to), and stay open.
+2. Apply the state: the wall's length and title, the front's length, title and `button.isHidden`, and the accessibility label on all three.
+3. Save `state.rawValue` to `UserDefaults` under `drawerState`.
 
-### Toggling
+### Restoring at launch
 
-```swift
-func setState(_ newState: DrawerState) {
-    if newState == .collapsed,
-       !canCollapse(dividerMinX: dividerItem.button?.window?.frame.minX,
-                    toggleMinX: toggleItem.button?.window?.frame.minX) {
-        NSSound.beep()
-        return   // stay expanded
-    }
-    state = newState
-    apply(state)
-    UserDefaults.standard.set(state.rawValue, forKey: "drawerState")
-}
-```
+For about the first 100–250 ms after launch, the menu bar reports placeholder frames: zero sizes, off-screen positions, and values that jump around. The close guard needs real positions, so:
 
-On launch, read `drawerState` and apply it. The collapse guard needs the items' window frames, which may not exist yet during `applicationDidFinishLaunching`, so apply the restored state on the next run-loop turn (`DispatchQueue.main.async`).
+- If the saved state is `open`, apply it immediately.
+- If it's `closed`, check every 100 ms (for up to 3 seconds, at launch only). Restore once the handle and the wall are both `isPlaced` and haven't moved between two checks. If they never settle, stay open and log it.
+- A refused restore is silent (no beep).
 
 ### Right-click menu
 
-The menu is built once and shown with `toggleItem.menu = menu; toggleItem.button?.performClick(nil); toggleItem.menu = nil` so it anchors to the item like a native menu. Clearing `.menu` afterwards keeps left-click as a plain toggle.
+The menu is built once. It's shown with `item.menu = menu; item.button?.performClick(nil); item.menu = nil`, so it anchors like a native menu while a plain left-click still toggles.
 
 | Item | Action |
 |------|--------|
@@ -159,42 +130,44 @@ The menu is built once and shown with `toggleItem.menu = menu; toggleItem.button
 
 The About panel mirrors `SpotifyNotificationsApp.aboutCredits` from Now Playing on Spotify:
 
-```swift
-let options: [NSApplication.AboutPanelOptionKey: Any] = [
-    .applicationName: "Drawer",
-    .applicationIcon: emojiIcon("🗄️", size: 128),
-    .credits: aboutCredits   // "Throw your menu bar icons into a drawer. Pull them out when you need them.\n\n" + "Pressware · Contact"
-]
-```
+- `.applicationName`: `"Drawer"`
+- `.applicationIcon`: `NSApp.applicationIconImage` (the 🗄️ app icon)
+- `.credits`: centered, 11pt system font. "Throw your menu bar icons into a drawer. Pull them out when you need them.", a blank line, then "Pressware" (`https://pressware.co?ref=drawer`) · "Contact" (`mailto:support@pressware.co`)
+- Version and copyright come from the bundle; the copyright is set in `Info.plist` as `NSHumanReadableCopyright`.
 
-- `aboutCredits`: centered, 11pt system font. "Pressware" links to `https://pressware.co?ref=drawer`, and "Contact" links to `mailto:support@pressware.co`.
-- `emojiIcon(_:size:)`: draws the emoji string into an `NSImage` with `NSImage(size:flipped:drawingHandler:)` at a font size of about 80% of the image size, centered.
+### Logging
+
+`os.Logger` with subsystem `co.pressware.drawer`, category `state`. It logs each state change at debug level, refusals to close at notice level, and a restore that never settles. Watch it with:
+
+```
+log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
+```
 
 ## Persistence
 
 | Key | Store | Type | Default | Purpose |
 |-----|-------|------|---------|---------|
-| `drawerState` | `UserDefaults` | String (`expanded` / `collapsed`) | `expanded` | Last toggle state |
-| `NSStatusItem Preferred Position DrawerToggle` | `UserDefaults` (managed by AppKit) | Number | — | Toggle position |
-| `NSStatusItem Preferred Position DrawerDivider` | `UserDefaults` (managed by AppKit) | Number | — | Divider position |
+| `drawerState` | `UserDefaults` | String (`open` / `closed`) | `open` | Last drawer state |
+| `NSStatusItem Preferred Position DrawerHandle` / `DrawerWall` / `DrawerFront` | `UserDefaults` (managed by AppKit) | Number | — | Item positions |
 
 ## Edge cases
 
 | Case | Behavior |
 |------|----------|
-| Divider dragged right of toggle | Collapse refused (beep); stays expanded |
-| Toggle or divider removed from menu bar (⌘-drag out) | `autosaveName` + `isVisible`: macOS remembers the removal. 0.1.0 does nothing special; relaunching restores both items because `isVisible` is set to `true` on launch |
-| Display added/removed, resolution change | No action needed; the length-based approach adapts |
+| Handle dragged right of the wall | Closing is refused (beep); the drawer stays open |
+| Icons left of the handle | Also hidden while closed (known limitation) |
+| An icon dropped in the gap just right of `\|` | Lands between the wall and the front: outside the drawer, so it stays visible, shown left of `[\|` while closed |
+| Handle or wall removed from the menu bar (⌘-drag out) | Relaunching restores it, because `isVisible` is set to `true` at launch |
+| Display added/removed, resolution change | No action needed |
 | Sleep/wake, fast user switching | No action needed |
 | Menu bar auto-hide enabled | Works the same |
 | Notch hides icons | Out of scope for 0.1.0 (see [future-features.md](future-features.md)) |
-| App quits while collapsed | The divider disappears, so hidden icons reappear. On relaunch the collapsed state is restored |
+| App quits while closed | All three items disappear and the hidden icons reappear. On relaunch the closed state is restored |
 
 ## Accessibility
 
-- Toggle: the accessibility label follows `DrawerState.accessibilityLabel`, and the image has an accessibility description.
-- Divider: labelled "Drawer divider".
-- Both items are reachable with VoiceOver through the standard menu bar navigation.
+- All three items carry the same label, the action a click will take: "Close drawer" while open, "Open drawer" while closed.
+- The items are reachable with VoiceOver through the standard menu bar navigation.
 
 ## Security and privacy
 
@@ -213,22 +186,29 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests:
+Unit tests (30):
 
 - `toggled` flips both ways.
-- `toggleSymbolName` is `chevron.right` for expanded and `chevron.left` for collapsed.
-- `dividerLength(for:)` returns `10_000` for collapsed and `variableLength` for expanded.
-- `canCollapse`: divider left of toggle → true; divider right of toggle → false; equal → false; either nil → false.
-- `restoredState`: nil or garbage → `.expanded`; valid raw values round-trip.
+- Titles: the handle is `[`; the wall is `|` when open and empty when closed; the front is empty when open and `[|` when closed.
+- `accessibilityLabel` is "Close drawer" when open and "Open drawer" when closed.
+- `wallLength(for:)` is `10_000` when closed and `variableLength` when open; `frontLength(for:)` is `variableLength` when closed and `0` when open.
+- `canClose`: handle left of wall → true; handle right of wall → false; equal → false; either nil → false.
+- `restoredState`: nil, garbage, or a value from the old design (`collapsed`) → `.open`; valid raw values round-trip.
+- `isPlaced`: inside the main or a secondary screen → true; zero height, below every screen, past the right edge, or no screens → false.
+
+Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
+
+- Open: the handle and wall windows are on-screen next to each other, with the front as a 16pt gap to their right.
+- Closed (`defaults write co.pressware.drawer drawerState closed`, then launch): the handle and wall windows are off-screen, and the front is on-screen where the wall was.
 
 Manual QA checklist:
 
-- Fresh install launches expanded, with the divider visible.
-- ⌘-drag an icon left of the divider, collapse, and confirm it's hidden; expand and confirm it's back.
+- A fresh install launches open, with `[` and `|` next to each other.
+- ⌘-drag icons in between `[` and `|`, click, and confirm they're hidden and `[|` shows. Click `[|` and confirm they're back.
 - Quit and relaunch in each state; the state is restored.
-- Drag the divider right of the toggle; collapse is refused.
-- Right-click shows About/Quit; About shows 🗄️, the tagline, and working links.
-- Light and dark menu bar, and a tinted/transparent menu bar: icons stay legible.
+- Drag `[` to the right of `|`; closing is refused with a beep.
+- Right-click or Control-click any of the three items to get About/Quit; About shows 🗄️, the tagline, and working links.
+- Light and dark menu bar, and a tinted/transparent menu bar: `[`, `|`, and `[|` stay legible.
 - Intel and Apple silicon builds run.
 
 ## Build and release

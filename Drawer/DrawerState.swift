@@ -1,32 +1,45 @@
 import AppKit
 
-/// Whether the icons left of the divider are showing or tucked away.
+/// Whether the drawer is open (its icons showing) or closed (its icons hidden).
 enum DrawerState: String {
-    case expanded
-    case collapsed
+    case open
+    case closed
 
-    var toggled: DrawerState { self == .expanded ? .collapsed : .expanded }
+    var toggled: DrawerState { self == .open ? .closed : .open }
 
-    /// SF Symbol for the toggle; points the direction the next click moves icons.
-    var toggleSymbolName: String { self == .expanded ? "chevron.right" : "chevron.left" }
+    /// The wall is the drawer's right edge. It's only visible while open; closing
+    /// stretches it off-screen.
+    var wallTitle: String { self == .open ? "|" : "" }
 
-    var accessibilityLabel: String {
-        self == .expanded ? "Collapse menu bar icons" : "Expand menu bar icons"
-    }
+    /// The front is the shut drawer, shown just right of the wall only while closed.
+    var frontTitle: String { self == .open ? "" : "[|" }
+
+    /// What clicking the drawer will do next.
+    var accessibilityLabel: String { self == .open ? "Close drawer" : "Open drawer" }
 }
 
-/// Wide enough to push every item left of the divider off any display.
-let dividerCollapsedLength: CGFloat = 10_000
+/// The drawer's left edge.
+let handleTitle = "["
 
-func dividerLength(for state: DrawerState) -> CGFloat {
-    state == .collapsed ? dividerCollapsedLength : NSStatusItem.variableLength
+/// Wide enough to push the wall, the handle, and everything between them off any display.
+/// macOS moves an item this wide entirely off-screen, which is why the shut drawer
+/// is drawn by a separate front item.
+let wallClosedLength: CGFloat = 10_000
+
+func wallLength(for state: DrawerState) -> CGFloat {
+    state == .closed ? wallClosedLength : NSStatusItem.variableLength
 }
 
-/// Collapsing is only safe when the divider is left of the toggle.
-/// If either position is unknown, don't collapse.
-func canCollapse(dividerMinX: CGFloat?, toggleMinX: CGFloat?) -> Bool {
-    guard let d = dividerMinX, let t = toggleMinX else { return false }
-    return d < t
+/// The front takes no space while open, so it can't be seen or dragged.
+func frontLength(for state: DrawerState) -> CGFloat {
+    state == .closed ? NSStatusItem.variableLength : 0
+}
+
+/// Closing only makes sense when the handle is left of the wall.
+/// If either position is unknown, don't close.
+func canClose(handleMinX: CGFloat?, wallMinX: CGFloat?) -> Bool {
+    guard let h = handleMinX, let w = wallMinX else { return false }
+    return h < w
 }
 
 /// Whether a status item's window has a real on-screen position yet.
@@ -36,7 +49,7 @@ func isPlaced(_ frame: CGRect, on screens: [CGRect]) -> Bool {
     return screens.contains { $0.contains(frame) }
 }
 
-/// Default for first launch is expanded.
+/// Default for first launch (or an unrecognized saved value) is open.
 func restoredState(from rawValue: String?) -> DrawerState {
-    rawValue.flatMap(DrawerState.init(rawValue:)) ?? .expanded
+    rawValue.flatMap(DrawerState.init(rawValue:)) ?? .open
 }
