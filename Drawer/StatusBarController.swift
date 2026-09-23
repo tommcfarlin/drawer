@@ -1,38 +1,54 @@
 import AppKit
 import os
 
-/// Owns Drawer's two menu bar items: the chevron toggle and the `|` divider.
+/// Owns Drawer's three menu bar items, left to right: the `[` handle, the `]` wall,
+/// and the front.
 ///
-/// Collapsing stretches the divider so wide that every item to its left is
-/// pushed off-screen; expanding shrinks it back to a thin `|`.
+/// Everything between the handle and the wall is in the drawer. Closing stretches
+/// the wall so wide that it, the handle, and everything left of it are pushed
+/// off-screen. The front, which only exists while closed, then shows an archive box
+/// in their place.
 @MainActor
 final class StatusBarController: NSObject {
     private static let stateKey = "drawerState"
     private static let log = Logger(subsystem: "co.pressware.drawer", category: "state")
     private static let restoreInterval: TimeInterval = 0.1
     private static let restoreMaxAttempts = 30
+    private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
+    private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
+    /// How long to wait after closing before confirming the front is on screen.
+    private static let frontCheckDelay: TimeInterval = 0.3
 
-    private let toggleItem: NSStatusItem
-    private let dividerItem: NSStatusItem
+    private let handleItem: NSStatusItem
+    private let wallItem: NSStatusItem
+    private let frontItem: NSStatusItem
     private let menu = NSMenu()
-    private(set) var state: DrawerState = .expanded
+    private(set) var state: DrawerState = .open
 
     override init() {
-        // New status items are inserted to the left of existing ones, so creating
-        // the toggle first puts the divider to its left.
-        toggleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
-        toggleItem.autosaveName = "DrawerToggle"
-        toggleItem.isVisible = true
+        // New status items are inserted to the left of existing ones, so create them
+        // right to left: front, wall, handle.
+        frontItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        frontItem.autosaveName = "DrawerFront"
+        // Start visible so the menu bar records the front's spot just right of the
+        // wall; it's hidden once launch settles if the drawer is open. Hiding it
+        // before it has a spot would bring it back at the far left, off-screen.
+        frontItem.isVisible = true
 
-        dividerItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-        dividerItem.autosaveName = "DrawerDivider"
-        dividerItem.isVisible = true
+        wallItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        wallItem.autosaveName = "DrawerWall"
+        wallItem.isVisible = true
+
+        handleItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        handleItem.autosaveName = "DrawerHandle"
+        handleItem.isVisible = true
 
         super.init()
 
-        if let button = toggleItem.button {
+        for item in [handleItem, wallItem, frontItem] {
+            guard let button = item.button else { continue }
             button.target = self
-            button.action = #selector(toggleClicked(_:))
+            button.action = #selector(itemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
@@ -43,47 +59,42 @@ final class StatusBarController: NSObject {
         let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
 
-        if let button = dividerItem.button {
-            button.appearsDisabled = true
-            button.setAccessibilityLabel("Drawer divider")
-        }
-
-        apply(state)
+        handleItem.button?.image = Self.bracket(opening: true)
+        wallItem.button?.image = Self.bracket(opening: false)
+        frontItem.button?.image = Self.closedImage
 
         restoreSavedState()
     }
 
     /// The menu bar positions its items shortly after launch, reporting placeholder
-    /// frames along the way. Wait until both items sit on a screen and have stopped
-    /// moving before restoring, so the collapse guard sees real positions.
+    /// frames along the way. Wait until all three items sit on a screen and have
+    /// stopped moving before restoring, so the close guard sees real positions and
+    /// the front has a recorded spot before it's hidden.
     private func restoreSavedState() {
         let saved = restoredState(from: UserDefaults.standard.string(forKey: Self.stateKey))
-        guard saved == .collapsed else {
-            setState(saved)
-            return
-        }
-
-        var previous: (CGRect, CGRect)?
+        let items = [handleItem, wallItem, frontItem]
+        var previous: [CGRect]?
         var attempts = 0
 
         func check() {
             attempts += 1
             let screens = NSScreen.screens.map(\.frame)
-            let divider = dividerItem.button?.window?.frame
-            let toggle = toggleItem.button?.window?.frame
+            let frames = items.compactMap { $0.button?.window?.frame }
 
-            if let divider, let toggle,
-               isPlaced(divider, on: screens), isPlaced(toggle, on: screens),
-               let (lastDivider, lastToggle) = previous,
-               lastDivider == divider, lastToggle == toggle {
+            if frames.count == items.count,
+               frames.allSatisfy({ isPlaced($0, on: screens) }),
+               frames == previous {
                 setState(saved, beepIfRefused: false)
+                if state != saved { apply(state) }
                 return
             }
             guard attempts < Self.restoreMaxAttempts else {
-                Self.log.notice("Menu bar items never settled; staying expanded")
+                Self.log.notice("Menu bar items never settled; opening the drawer")
+                state = .open
+                apply(state)
                 return
             }
-            if let divider, let toggle { previous = (divider, toggle) }
+            previous = frames
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.restoreInterval) { check() }
         }
 
@@ -91,11 +102,11 @@ final class StatusBarController: NSObject {
     }
 
     func setState(_ newState: DrawerState, beepIfRefused: Bool = true) {
-        let dividerMinX = dividerItem.button?.window?.frame.minX
-        let toggleMinX = toggleItem.button?.window?.frame.minX
-        Self.log.debug("setState \(newState.rawValue, privacy: .public) divider=\(String(describing: dividerMinX), privacy: .public) toggle=\(String(describing: toggleMinX), privacy: .public)")
-        if newState == .collapsed, !canCollapse(dividerMinX: dividerMinX, toggleMinX: toggleMinX) {
-            Self.log.notice("Refused to collapse: divider is not left of the toggle")
+        let handleMinX = handleItem.button?.window?.frame.minX
+        let wallMinX = wallItem.button?.window?.frame.minX
+        Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
+        if newState == .closed, !canClose(handleMinX: handleMinX, wallMinX: wallMinX) {
+            Self.log.notice("Refused to close: the handle is not left of the wall")
             if beepIfRefused { NSSound.beep() }
             return
         }
@@ -104,22 +115,101 @@ final class StatusBarController: NSObject {
         UserDefaults.standard.set(state.rawValue, forKey: Self.stateKey)
     }
 
-    @objc private func toggleClicked(_ sender: NSStatusBarButton) {
+    @objc private func itemClicked(_ sender: NSStatusBarButton) {
         guard let event = NSApp.currentEvent else { return }
         let wantsMenu = event.type == .rightMouseUp
             || (event.type == .leftMouseUp && event.modifierFlags.contains(.control))
         if wantsMenu {
-            showMenu()
+            let item = [handleItem, wallItem, frontItem].first { $0.button === sender } ?? wallItem
+            showMenu(from: item)
         } else {
             setState(state.toggled)
         }
     }
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
-    private func showMenu() {
-        toggleItem.menu = menu
-        toggleItem.button?.performClick(nil)
-        toggleItem.menu = nil
+    private func showMenu(from item: NSStatusItem) {
+        item.menu = menu
+        item.button?.performClick(nil)
+        item.menu = nil
+    }
+
+    private func apply(_ state: DrawerState) {
+        if state.showsFront && !frontItem.isVisible {
+            // A re-shown item lands wherever its saved position says, and the menu bar
+            // doesn't save one on its own. Point it just right of the wall, and show it
+            // before the wall stretches so it isn't pushed off-screen with it.
+            positionFrontNextToWall()
+            frontItem.isVisible = true
+            confirmFrontIsShowing()
+        }
+        wallItem.length = wallLength(for: state)
+        if !state.showsFront { frontItem.isVisible = false }
+
+        for item in [handleItem, wallItem, frontItem] {
+            item.button?.setAccessibilityLabel(state.accessibilityLabel)
+        }
+    }
+
+    /// Positions only order correctly against other saved positions, so make sure the
+    /// wall has one (recording where it already is doesn't move it), then place the
+    /// front just below it.
+    private func positionFrontNextToWall() {
+        let defaults = UserDefaults.standard
+        var wallPosition = defaults.object(forKey: Self.wallPositionKey) as? Double
+        if wallPosition == nil, let wall = wallItem.button?.window, let screen = wall.screen {
+            wallPosition = preferredPosition(itemMaxX: wall.frame.maxX, screenMaxX: screen.frame.maxX)
+            defaults.set(wallPosition, forKey: Self.wallPositionKey)
+        }
+        guard let wallPosition else { return }
+        let front = frontPreferredPosition(wallPosition: wallPosition)
+        defaults.set(front, forKey: Self.frontPositionKey)
+        Self.log.debug("wall position \(wallPosition, privacy: .public), front position \(front, privacy: .public)")
+    }
+
+    /// Safety net: if the front didn't land on screen, there'd be nothing to click to
+    /// reopen the drawer, so reopen it.
+    private func confirmFrontIsShowing() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.frontCheckDelay) { [weak self] in
+            guard let self, self.state == .closed else { return }
+            let screens = NSScreen.screens.map(\.frame)
+            guard let frame = self.frontItem.button?.window?.frame, isPlaced(frame, on: screens) else {
+                Self.log.error("The closed drawer didn't appear on screen; reopening")
+                self.setState(.open)
+                return
+            }
+        }
+    }
+
+    // MARK: - Images
+
+    /// `[` or `]`, drawn to match SF Symbols' regular weight at menu bar size.
+    private static func bracket(opening: Bool) -> NSImage {
+        let image = NSImage(size: NSSize(width: 7, height: 16), flipped: false) { _ in
+            let path = NSBezierPath()
+            path.lineWidth = 1.5
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            let tips: CGFloat = opening ? 5.5 : 1.5
+            let spine: CGFloat = opening ? 1.5 : 5.5
+            path.move(to: NSPoint(x: tips, y: 1.5))
+            path.line(to: NSPoint(x: spine, y: 1.5))
+            path.line(to: NSPoint(x: spine, y: 14.5))
+            path.line(to: NSPoint(x: tips, y: 14.5))
+            NSColor.black.setStroke()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private static var closedImage: NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        let image = NSImage(systemSymbolName: closedSymbolName, accessibilityDescription: "Drawer")?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        return image
     }
 
     @objc private func showAbout() {
@@ -156,18 +246,5 @@ final class StatusBarController: NSObject {
         credits.append(NSAttributedString(string: " · ", attributes: attributes))
         credits.append(link("Contact", "mailto:support@pressware.co"))
         return credits
-    }
-
-    private func apply(_ state: DrawerState) {
-        dividerItem.length = dividerLength(for: state)
-        dividerItem.button?.title = state == .collapsed ? "" : "|"
-
-        if let button = toggleItem.button {
-            let image = NSImage(systemSymbolName: state.toggleSymbolName,
-                                accessibilityDescription: state.accessibilityLabel)
-            image?.isTemplate = true
-            button.image = image
-            button.setAccessibilityLabel(state.accessibilityLabel)
-        }
     }
 }

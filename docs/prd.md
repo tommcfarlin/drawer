@@ -7,7 +7,7 @@
 
 ## Summary
 
-Drawer is a tiny macOS menu bar utility that tucks third-party menu bar icons out of sight with a single click, and brings them back with another. It is deliberately simple: one toggle, one divider, no preferences.
+Drawer is a tiny macOS menu bar utility that works like a real drawer. Put menu bar icons inside it, close it with one click, and they're gone. Open it again and they're back. It is deliberately simple: two brackets, one archive box, no preferences.
 
 **Tagline:** Throw your menu bar icons into a drawer. Pull them out when you need them.
 
@@ -19,15 +19,15 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 
 ## Goals
 
-- Hide all menu bar icons placed to the left of a divider with one click.
+- Hide every icon inside the drawer (between `[` and `]`) with one click.
 - Show them again with one click.
-- Remember the last state across launches.
+- Remember whether the drawer was open or closed across launches.
 - Require no special permissions.
 - Look and feel like a native part of macOS.
 
 ## Non-goals (0.1.0)
 
-- Choosing which individual icons stay visible (beyond where the user drags them relative to the divider).
+- Choosing which individual icons stay visible, beyond dragging them in or out of the drawer.
 - Automatically detecting and hiding third-party icons with no setup.
 - A preferences window.
 - Launch at Login.
@@ -45,52 +45,57 @@ Mac users who like a clean, orderly menu bar and want a "set it once, forget it"
 
 ## User experience
 
-### Menu bar items
+### The drawer
 
-Drawer adds two items to the menu bar:
+Drawer adds a pair of brackets to the menu bar. Everything between them is **in the drawer**:
 
-| Item | Appearance | Purpose |
-|------|------------|---------|
-| Toggle | Chevron (SF Symbol) | Click to collapse or expand |
-| Divider | Thin `\|` (shown only when expanded) | Marks the boundary; icons to its left are hidden when collapsed |
+| Item | Open | Closed | Purpose |
+|------|------|--------|---------|
+| Handle | `[` | (hidden) | The drawer's left edge |
+| Wall | `]` | (hidden) | The drawer's right edge |
+| Front | (not in the menu bar) | Archive box (SF Symbols `archivebox`) | The shut drawer; it echoes the 🗄️ app icon |
 
 ```
-Expanded:   [Dropbox] [1Password] [Slack]  |  ›  [Wi-Fi] [Battery] [Control Center] [Clock]
-Collapsed:                                    ‹  [Wi-Fi] [Battery] [Control Center] [Clock]
+Open:    [ Dropbox 1Password Slack ]  Wi-Fi Battery Control-Center Clock
+Closed:                     (archive box)  Wi-Fi Battery Control-Center Clock
 ```
+
+Icons to the right of `]` are never hidden.
+
+All three are **template images**, drawn at the same weight as the icons around them, so macOS tints them for light, dark, and tinted menu bars (per Apple's Human Interface Guidelines for menu bar extras). Earlier builds used the text characters `[`, `|`, and `[|`, which didn't match the size, weight, or baseline of neighboring icons.
 
 ### States
 
-| State | Toggle icon | Divider | Icons left of divider |
-|-------|-------------|---------|-----------------------|
-| Expanded | `chevron.right` | Visible `\|` | Visible |
-| Collapsed | `chevron.left` | Invisible (stretched off-screen) | Hidden |
-
-In both states the chevron points in the direction the click will move things: in the expanded state it points right (tuck icons away), and in the collapsed state it points left (pull them back out).
+| State | Handle and wall | Front | Icons in the drawer |
+|-------|-----------------|-------|---------------------|
+| Open | `[` … `]` | Not in the menu bar | Visible |
+| Closed | Pushed off-screen | Archive box | Hidden |
 
 ### Interactions
 
 | Action | Result |
 |--------|--------|
-| Left-click toggle | Switches between collapsed and expanded |
-| Right-click toggle | Opens a small menu: **About Drawer**, divider, **Quit Drawer** (⌘Q) |
-| ⌘-drag any menu bar icon | Standard macOS rearranging; icons dragged left of the divider will be hidden when collapsed |
+| Left-click `[`, `]`, or the archive box | Opens or closes the drawer |
+| Right-click (or Control-click) any of them | Opens a small menu: **About Drawer**, separator, **Quit Drawer** (⌘Q) |
+| ⌘-drag any menu bar icon | Standard macOS rearranging. Drop an icon between `[` and `]` to put it in the drawer. Drop it right of `]` to keep it always visible. |
 
 ### First launch
 
-1. Drawer launches in the **expanded** state so the divider is visible.
-2. The user ⌘-drags the icons they want hidden to the left of the `|` divider (documented in the README).
-3. The user clicks the chevron to collapse.
+1. Drawer launches **open**, with `[` and `]` next to each other at the left end of the status icons.
+2. The user ⌘-drags the icons they want hidden in between `[` and `]` (documented in the README).
+3. The user clicks `[` or `]` to close the drawer.
 
-After this, macOS places most newly installed apps' icons at the far left of the menu bar, so they land on the hidden side automatically.
+### Known limitation: left of the handle
+
+Closing the drawer works by stretching the wall so everything to its left is pushed off-screen. macOS offers no way to hide icons from the middle of the menu bar without extra permissions, so **anything left of `[` is hidden when the drawer closes, too**. Most new apps add their icons at the far left of the menu bar, so while the drawer is open their icons can appear just left of `[`. Drag them into the drawer or to the right of `]`.
 
 ### State persistence
 
-The collapsed/expanded state is saved and restored on the next launch. Divider and toggle positions are restored by macOS.
+Whether the drawer is open or closed is saved and restored on the next launch. macOS restores the positions of `[` and `]`.
 
 ### Safety rule
 
-If the divider ends up to the **right** of the toggle (for example, the user ⌘-dragged it there), collapsing would hide the toggle itself and strand the user. In this case Drawer refuses to collapse and stays expanded.
+If `[` ends up to the **right** of `]` (for example, the user ⌘-dragged it there), the drawer is inside out and closing it wouldn't make sense. In this case Drawer refuses to close, beeps, and stays open.
 
 ### About panel
 
@@ -110,16 +115,17 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | ID | Requirement |
 |----|-------------|
 | F1 | App runs as a menu bar agent with no Dock icon. |
-| F2 | App shows a toggle item with a chevron icon reflecting the current state. |
-| F3 | App shows a divider item to the left of the toggle; it displays `\|` when expanded. |
-| F4 | Left-clicking the toggle collapses or expands. |
-| F5 | Collapsing hides every status item positioned to the left of the divider. |
-| F6 | Expanding restores those items. |
-| F7 | Right-clicking the toggle shows a menu with About Drawer and Quit Drawer. |
-| F8 | Collapsed/expanded state persists across launches. |
-| F9 | Toggle and divider positions persist across launches. |
-| F10 | App will not collapse if the divider is to the right of the toggle. |
-| F11 | First launch starts expanded. |
+| F2 | App shows a handle (`[`) and, to its right, a wall (`]`), both as template images. |
+| F3 | Left-clicking the handle or the wall opens or closes the drawer. |
+| F4 | Closing hides every status item between the handle and the wall. |
+| F5 | While closed, an archive box appears where the drawer was; icons right of it are unaffected. |
+| F6 | Opening restores the handle and every icon in the drawer. |
+| F7 | Right-clicking (or Control-clicking) any drawer item shows a menu with About Drawer and Quit Drawer. |
+| F8 | Open/closed state persists across launches. |
+| F9 | Handle and wall positions persist across launches. |
+| F10 | App will not close the drawer if the handle is to the right of the wall. |
+| F11 | First launch starts open. |
+| F12 | While open, Drawer adds nothing to the menu bar besides `[` and `]` (no empty space or hover highlight). |
 
 ### Non-functional
 
@@ -130,8 +136,8 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | N3 | Requires no permissions (no Accessibility, Screen Recording, or Automation). |
 | N4 | App Sandbox and Hardened Runtime enabled. |
 | N5 | 0.1.x: built and run locally with an Apple Development certificate. 1.0.0+: distributed as a notarized, Developer ID–signed DMG. |
-| N6 | Idle CPU usage effectively zero; no polling or timers. |
-| N7 | VoiceOver labels on both menu bar items. |
+| N6 | Idle CPU usage effectively zero; no polling or timers (a bounded check at launch is allowed). |
+| N7 | VoiceOver labels on both menu bar items ("Close drawer" / "Open drawer"). |
 | N8 | Collects no data; no network access. |
 
 ## Pricing and distribution
@@ -142,12 +148,13 @@ Standard macOS About panel, matching Now Playing on Spotify:
 
 ## Success criteria
 
-- A new user can go from download to a collapsed menu bar in under a minute using only the README.
+- A new user can go from download to a closed drawer in under a minute using only the README.
 - Toggling is instant with no visible lag.
 - No crashes or stuck states across restarts, display changes, or sleep/wake.
 
 ## Resolved decisions
 
+- **Drawer design:** the drawer is the space between a `[` handle and a `]` wall; closed, it shows an archive box (SF Symbols `archivebox`, echoing the 🗄️ icon). All drawn as template images per Apple's HIG. Decided 2026-09-23, replacing the original chevron-and-divider design and a text-based `[ … |` / `[|` version.
 - **App icon:** the 🗄️ emoji is used for the About panel **and** as the Finder/DMG app icon (AppIcon set generated from the emoji).
 - **Updates:** no Sparkle or automatic updates yet.
 - **Download host:** DMGs are published on GitHub Releases, starting at 1.0.0.

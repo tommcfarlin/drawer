@@ -4,86 +4,109 @@ final class DrawerStateTests: XCTestCase {
 
     // MARK: - toggled
 
-    func testToggledFromExpandedIsCollapsed() {
-        XCTAssertEqual(DrawerState.expanded.toggled, .collapsed)
+    func testToggledFromOpenIsClosed() {
+        XCTAssertEqual(DrawerState.open.toggled, .closed)
     }
 
-    func testToggledFromCollapsedIsExpanded() {
-        XCTAssertEqual(DrawerState.collapsed.toggled, .expanded)
+    func testToggledFromClosedIsOpen() {
+        XCTAssertEqual(DrawerState.closed.toggled, .open)
     }
 
-    // MARK: - toggleSymbolName
+    // MARK: - front
 
-    func testExpandedSymbolPointsRight() {
-        XCTAssertEqual(DrawerState.expanded.toggleSymbolName, "chevron.right")
+    func testFrontHiddenWhileOpen() {
+        XCTAssertFalse(DrawerState.open.showsFront)
     }
 
-    func testCollapsedSymbolPointsLeft() {
-        XCTAssertEqual(DrawerState.collapsed.toggleSymbolName, "chevron.left")
+    func testFrontShownWhileClosed() {
+        XCTAssertTrue(DrawerState.closed.showsFront)
+    }
+
+    func testClosedSymbolIsArchiveBox() {
+        XCTAssertEqual(closedSymbolName, "archivebox")
     }
 
     // MARK: - accessibilityLabel
 
-    func testExpandedAccessibilityLabel() {
-        XCTAssertEqual(DrawerState.expanded.accessibilityLabel, "Collapse menu bar icons")
+    func testOpenAccessibilityLabel() {
+        XCTAssertEqual(DrawerState.open.accessibilityLabel, "Close drawer")
     }
 
-    func testCollapsedAccessibilityLabel() {
-        XCTAssertEqual(DrawerState.collapsed.accessibilityLabel, "Expand menu bar icons")
+    func testClosedAccessibilityLabel() {
+        XCTAssertEqual(DrawerState.closed.accessibilityLabel, "Open drawer")
     }
 
-    // MARK: - dividerLength
+    // MARK: - wallLength
 
-    func testCollapsedDividerLength() {
-        XCTAssertEqual(dividerLength(for: .collapsed), 10_000)
+    func testClosedWallLength() {
+        XCTAssertEqual(wallLength(for: .closed), 10_000)
     }
 
-    func testExpandedDividerLengthIsVariable() {
-        XCTAssertEqual(dividerLength(for: .expanded), NSStatusItem.variableLength)
+    func testOpenWallLengthIsVariable() {
+        XCTAssertEqual(wallLength(for: .open), NSStatusItem.variableLength)
     }
 
-    // MARK: - canCollapse
+    // MARK: - preferred positions
 
-    func testCanCollapseWhenDividerIsLeftOfToggle() {
-        XCTAssertTrue(canCollapse(dividerMinX: 100, toggleMinX: 200))
+    func testPreferredPositionMatchesWhatTheMenuBarSaves() {
+        // Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as 433.
+        XCTAssertEqual(preferredPosition(itemMaxX: 2127, screenMaxX: 2560), 433)
     }
 
-    func testCannotCollapseWhenDividerIsRightOfToggle() {
-        XCTAssertFalse(canCollapse(dividerMinX: 300, toggleMinX: 200))
+    func testPreferredPositionOnSecondaryScreen() {
+        XCTAssertEqual(preferredPosition(itemMaxX: -200, screenMaxX: 0), 200)
     }
 
-    func testCannotCollapseWhenPositionsAreEqual() {
-        XCTAssertFalse(canCollapse(dividerMinX: 200, toggleMinX: 200))
+    func testFrontSortsJustRightOfWall() {
+        XCTAssertEqual(frontPreferredPosition(wallPosition: 433), 432)
     }
 
-    func testCannotCollapseWhenDividerPositionIsUnknown() {
-        XCTAssertFalse(canCollapse(dividerMinX: nil, toggleMinX: 200))
+    // MARK: - canClose
+
+    func testCanCloseWhenHandleIsLeftOfWall() {
+        XCTAssertTrue(canClose(handleMinX: 100, wallMinX: 200))
     }
 
-    func testCannotCollapseWhenTogglePositionIsUnknown() {
-        XCTAssertFalse(canCollapse(dividerMinX: 100, toggleMinX: nil))
+    func testCannotCloseWhenHandleIsRightOfWall() {
+        XCTAssertFalse(canClose(handleMinX: 300, wallMinX: 200))
     }
 
-    func testCannotCollapseWhenBothPositionsAreUnknown() {
-        XCTAssertFalse(canCollapse(dividerMinX: nil, toggleMinX: nil))
+    func testCannotCloseWhenPositionsAreEqual() {
+        XCTAssertFalse(canClose(handleMinX: 200, wallMinX: 200))
+    }
+
+    func testCannotCloseWhenHandlePositionIsUnknown() {
+        XCTAssertFalse(canClose(handleMinX: nil, wallMinX: 200))
+    }
+
+    func testCannotCloseWhenWallPositionIsUnknown() {
+        XCTAssertFalse(canClose(handleMinX: 100, wallMinX: nil))
+    }
+
+    func testCannotCloseWhenBothPositionsAreUnknown() {
+        XCTAssertFalse(canClose(handleMinX: nil, wallMinX: nil))
     }
 
     // MARK: - restoredState
 
-    func testRestoredStateDefaultsToExpandedWhenMissing() {
-        XCTAssertEqual(restoredState(from: nil), .expanded)
+    func testRestoredStateDefaultsToOpenWhenMissing() {
+        XCTAssertEqual(restoredState(from: nil), .open)
     }
 
-    func testRestoredStateDefaultsToExpandedForUnknownValue() {
-        XCTAssertEqual(restoredState(from: "bogus"), .expanded)
+    func testRestoredStateDefaultsToOpenForUnknownValue() {
+        XCTAssertEqual(restoredState(from: "bogus"), .open)
     }
 
-    func testRestoredStateRoundTripsExpanded() {
-        XCTAssertEqual(restoredState(from: DrawerState.expanded.rawValue), .expanded)
+    func testRestoredStateDefaultsToOpenForOldDesignValue() {
+        XCTAssertEqual(restoredState(from: "collapsed"), .open)
     }
 
-    func testRestoredStateRoundTripsCollapsed() {
-        XCTAssertEqual(restoredState(from: DrawerState.collapsed.rawValue), .collapsed)
+    func testRestoredStateRoundTripsOpen() {
+        XCTAssertEqual(restoredState(from: DrawerState.open.rawValue), .open)
+    }
+
+    func testRestoredStateRoundTripsClosed() {
+        XCTAssertEqual(restoredState(from: DrawerState.closed.rawValue), .closed)
     }
 
     // MARK: - isPlaced
