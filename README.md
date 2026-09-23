@@ -33,6 +33,7 @@ Before you start, read [Good to know](#good-to-know): closing the drawer also hi
 
 - **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
 - **Keep `[` to the left of `]`.** If they get swapped, Drawer won't close; it beeps and tells you how to fix it.
+- **On a MacBook with a notch,** icons that don't fit beside the notch are hidden by macOS, starting with the drawer's leftmost ones. Keep your favorites right next to `]`: Drawer's menu tells you how many fit.
 - **Can't find the archive box?** macOS sometimes hides menu bar icons when the menu bar is crowded. Open Drawer again (from Finder, Spotlight, or Launchpad) and the drawer opens.
 
 ## Menu

@@ -187,6 +187,35 @@ The About panel mirrors `SpotifyNotificationsApp.aboutCredits` from Now Playing 
 log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 ```
 
+## Notch (0.2.0)
+
+### What happens
+
+On a notched display (`NSScreen.auxiliaryTopRightArea != nil`), status items only fit in the area right of the notch. macOS hides the overflow from the **left**. Measured on Tom's MacBook with the drawer open: the external display showed all 26 status item windows, and the MacBook showed 15. `[` and the leftmost drawer icons were hidden; `]` and everything right of it were visible.
+
+No permission-free fix can reveal hidden icons: the notch hides a leftmost run, and so does anything an app can do without permission (a stretched status item). The visible set is always a rightmost run. So 0.2.0 measures and explains; revealing icons is the opt-in drop-down (#29).
+
+### Measuring (no permissions)
+
+- **Windows per display:** `CGWindowListCopyWindowInfo([.optionAll])`, filtered to layer 25 (status items) and to windows inside the notched display's `CGDisplayBounds`. For each window it reads `x`, `width`, and `kCGWindowIsOnscreen`. Window names and owners aren't read (and on macOS 26 every owner is Control Center anyway).
+- **Finding Drawer's items on that display:** each display has its own copy of the menu bar, with items at the same distance from its right edge (observed ±2pt between copies). Drawer's in-process frames may come from any copy, so it converts them with `offsetFromRightEdge(itemMinX:screenMaxX:)` and back onto the notched display, then matches the nearest window within `notchTolerance` (3pt).
+- **`notchFit(items:handleMinX:wallMinX:tolerance:) -> NotchFit`** (pure):
+  - `.outsideDoesNotFit` if the wall (or, when closed, the front) has no on-screen window at its position.
+  - `.allFit` if the handle is on screen (the whole drawer is visible).
+  - `.drawerPartlyHidden(visible:)` otherwise, where `visible` counts on-screen windows between the handle and the wall.
+  - If the handle's or wall's position is unknown, `.allFit` (say nothing rather than something wrong).
+- **Across displays:** the worst result across notched displays; `.allFit` if there are none.
+
+### Hint
+
+`notchHint(for: NotchFit) -> [String]` (pure, localized) produces the dimmed lines listed in the PRD's **Notch** table.
+- `makeMenu` shows them at the top when there's no other notice (a refused or failed close takes priority).
+- The tooltip of `]` (or of the front, when closed) becomes the action title, a newline, and the first line.
+
+### When it's refreshed
+
+On every state change, each time the menu opens, and on `NSApplication.didChangeScreenParametersNotification`. There's no polling. A tooltip can be briefly stale after you ⌘-drag icons; opening the menu or changing state refreshes it.
+
 ## Persistence
 
 | Key | Store | Type | Default | Purpose |
@@ -226,6 +255,8 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 - Unit tests run outside the app bundle, so lookups fall back to the English keys, which the tests assert.
 
 ## Known issues
+
+- **Notch hint can be briefly stale:** it's refreshed on state changes, menu opens, and display changes, not while you ⌘-drag icons.
 
 - **AppKit layout warning at launch (low):** Release builds sometimes log once, from AppKit, *"It's not legal to call -layoutSubtreeIfNeeded on a view which is already being laid out."* It predates the bounce, appears during the system's own status item scene setup (alongside Control Center scene-client errors), and didn't reproduce under the debugger with a breakpoint on `_NSDetectedLayoutRecursion`. No visible effect. Revisit if it becomes reproducible.
 
