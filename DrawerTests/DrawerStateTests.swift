@@ -371,4 +371,38 @@ final class DrawerStateTests: XCTestCase {
     func testWarningOutranksPartlyHidden() {
         XCTAssertEqual(worst([.drawerPartlyHidden(visible: 3), .outsideDoesNotFit, .allFit]), .outsideDoesNotFit)
     }
+
+    // MARK: - notch hint while closed
+
+    func testClosedHintDescribesTheOpenDrawer() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 8), drawerIsOpen: false), [
+            "When Open, Only the 8 Icons Nearest ] Fit Beside the Notch",
+            "Open the Drawer and ⌘-Drag Your Favorites Next to ]",
+        ])
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 1), drawerIsOpen: false).first, "When Open, Only the Icon Nearest ] Fits Beside the Notch")
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 0), drawerIsOpen: false).first, "When Open, No Drawer Icons Fit Beside the Notch")
+    }
+
+    func testNothingToExplainWithoutANotch() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: false, state: .closed, current: .allFit, lastOpen: .drawerPartlyHidden(visible: 8)), .allFit)
+        XCTAssertEqual(notchFitToExplain(hasNotch: false, state: .open, current: .outsideDoesNotFit, lastOpen: nil), .allFit)
+    }
+
+    func testOpenDrawerExplainsCurrentMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: .drawerPartlyHidden(visible: 8), lastOpen: .drawerPartlyHidden(visible: 3)), .drawerPartlyHidden(visible: 8))
+    }
+
+    func testClosedDrawerExplainsLastOpenMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .allFit, lastOpen: .drawerPartlyHidden(visible: 8)), .drawerPartlyHidden(visible: 8))
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .allFit, lastOpen: nil), .allFit)
+    }
+
+    func testOutsideWarningWinsWhenClosed() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .outsideDoesNotFit, lastOpen: .drawerPartlyHidden(visible: 8)), .outsideDoesNotFit)
+    }
+
+    func testUnmeasuredOpenDrawerFallsBackToLastMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: .drawerPartlyHidden(visible: 8)), .drawerPartlyHidden(visible: 8))
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: nil), .allFit)
+    }
 }

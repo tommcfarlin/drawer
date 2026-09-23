@@ -112,8 +112,10 @@ On a MacBook with a notch, the menu bar only has the space to the right of the n
 | One fits | "Only the Icon Nearest ] Fits Beside the Notch" / … | same pattern |
 | None fit | "No Drawer Icons Fit Beside the Notch" / … | same pattern |
 | Icons outside the drawer don't fit (open or closed) | "Too Many Icons Outside the Drawer to Fit Beside the Notch" / "⌘-Drag Some Icons Into the Drawer" | the visible item's tooltip + the first line |
+| Drawer closed, and some drawer icons were hidden the last time it was open | "When Open, Only the 8 Icons Nearest ] Fit Beside the Notch" / "Open the Drawer and ⌘-Drag Your Favorites Next to ]" (same one/none forms) | archive box: "Open Drawer" + the first line |
 | Everything fits, or no notched display | *(nothing)* | unchanged |
 
+- The hint is shown whenever a notched display is present, whether the drawer is open or closed, and never otherwise (decided 2026-09-23). While closed, the drawer's icons are off-screen and can't be measured, so it uses the last measurement from when the drawer was open. That measurement is remembered across launches but forgotten if the notched displays change.
 - The hint never pops up; it's only in the menu and tooltip.
 - A notice about a refused or failed close takes priority in the menu.
 - It's measured without permissions, and refreshed when the drawer changes, when the menu opens, and when displays change.
