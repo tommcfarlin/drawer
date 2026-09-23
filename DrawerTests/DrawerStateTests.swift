@@ -85,4 +85,35 @@ final class DrawerStateTests: XCTestCase {
     func testRestoredStateRoundTripsCollapsed() {
         XCTAssertEqual(restoredState(from: DrawerState.collapsed.rawValue), .collapsed)
     }
+
+    // MARK: - isPlaced
+
+    private let screens = [
+        CGRect(x: 0, y: 0, width: 2560, height: 1440),
+        CGRect(x: -1512, y: 0, width: 1512, height: 982),
+    ]
+
+    func testPlacedWhenInsideMainScreen() {
+        XCTAssertTrue(isPlaced(CGRect(x: 1410, y: 1410, width: 24, height: 30), on: screens))
+    }
+
+    func testPlacedWhenInsideSecondaryScreen() {
+        XCTAssertTrue(isPlaced(CGRect(x: -757, y: 952, width: 32, height: 30), on: screens))
+    }
+
+    func testNotPlacedWhenHeightIsZero() {
+        XCTAssertFalse(isPlaced(CGRect(x: 0, y: 0, width: 24, height: 0), on: screens))
+    }
+
+    func testNotPlacedWhenBelowEveryScreen() {
+        XCTAssertFalse(isPlaced(CGRect(x: 0, y: -30, width: 24, height: 30), on: screens))
+    }
+
+    func testNotPlacedWhenOffTheRightEdge() {
+        XCTAssertFalse(isPlaced(CGRect(x: 2550, y: 1410, width: 24, height: 30), on: screens))
+    }
+
+    func testNotPlacedWithNoScreens() {
+        XCTAssertFalse(isPlaced(CGRect(x: 1410, y: 1410, width: 24, height: 30), on: []))
+    }
 }

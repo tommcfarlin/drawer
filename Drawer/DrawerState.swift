@@ -29,6 +29,13 @@ func canCollapse(dividerMinX: CGFloat?, toggleMinX: CGFloat?) -> Bool {
     return d < t
 }
 
+/// Whether a status item's window has a real on-screen position yet.
+/// While the menu bar is still laying out, frames can be empty or off every screen.
+func isPlaced(_ frame: CGRect, on screens: [CGRect]) -> Bool {
+    guard frame.width > 0, frame.height > 0 else { return false }
+    return screens.contains { $0.contains(frame) }
+}
+
 /// Default for first launch is expanded.
 func restoredState(from rawValue: String?) -> DrawerState {
     rawValue.flatMap(DrawerState.init(rawValue:)) ?? .expanded
