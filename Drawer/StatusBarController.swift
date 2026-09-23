@@ -231,21 +231,14 @@ final class StatusBarController: NSObject {
 
     // MARK: - Images
 
-    /// `[` or `]`, drawn to match SF Symbols' regular weight at menu bar size.
+    /// `[` or `]`, matching SF Symbols' regular weight at menu bar size. The drawing
+    /// handler runs once per backing scale, so each display gets pixel-aligned strokes.
     private static func bracket(opening: Bool) -> NSImage {
-        let image = NSImage(size: NSSize(width: 7, height: 16), flipped: false) { _ in
-            let path = NSBezierPath()
-            path.lineWidth = 1.5
-            path.lineCapStyle = .round
-            path.lineJoinStyle = .round
-            let tips: CGFloat = opening ? 5.5 : 1.5
-            let spine: CGFloat = opening ? 1.5 : 5.5
-            path.move(to: NSPoint(x: tips, y: 1.5))
-            path.line(to: NSPoint(x: spine, y: 1.5))
-            path.line(to: NSPoint(x: spine, y: 14.5))
-            path.line(to: NSPoint(x: tips, y: 14.5))
-            NSColor.black.setStroke()
-            path.stroke()
+        let image = NSImage(size: bracketSize, flipped: false) { _ in
+            let ctm = NSGraphicsContext.current?.cgContext.ctm
+            let scale = ctm.map { max(abs($0.a), abs($0.b)) } ?? 2
+            NSColor.black.setFill()
+            bracketRects(opening: opening, scale: scale).forEach { $0.fill() }
             return true
         }
         image.isTemplate = true

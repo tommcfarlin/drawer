@@ -108,6 +108,53 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertFalse(canClose(handleMinX: nil, wallMinX: nil))
     }
 
+    // MARK: - bracketRects
+
+    private func assertOnPixelGrid(_ rects: [CGRect], scale: CGFloat, file: StaticString = #filePath, line: UInt = #line) {
+        for rect in rects {
+            for edge in [rect.minX, rect.maxX, rect.minY, rect.maxY] {
+                let device = edge * scale
+                XCTAssertEqual(device, device.rounded(), accuracy: 0.0001, "edge \(edge) at \(scale)x", file: file, line: line)
+            }
+        }
+    }
+
+    func testBracketEdgesOnPixelGridAt1x() {
+        assertOnPixelGrid(bracketRects(opening: true, scale: 1), scale: 1)
+        assertOnPixelGrid(bracketRects(opening: false, scale: 1), scale: 1)
+    }
+
+    func testBracketEdgesOnPixelGridAt2x() {
+        assertOnPixelGrid(bracketRects(opening: true, scale: 2), scale: 2)
+        assertOnPixelGrid(bracketRects(opening: false, scale: 2), scale: 2)
+    }
+
+    func testBracketStrokeIsOnePixelAt1xAndOnePointFiveAt2x() {
+        XCTAssertEqual(bracketRects(opening: true, scale: 1)[0].width, 1)
+        XCTAssertEqual(bracketRects(opening: true, scale: 2)[0].width, 1.5)
+    }
+
+    func testClosingBracketMirrorsOpeningBracket() {
+        for scale: CGFloat in [1, 2] {
+            let opening = bracketRects(opening: true, scale: scale)
+            let closing = bracketRects(opening: false, scale: scale)
+            for (o, c) in zip(opening, closing) {
+                XCTAssertEqual(c.minX, bracketSize.width - o.maxX, accuracy: 0.0001)
+                XCTAssertEqual(c.minY, o.minY)
+                XCTAssertEqual(c.size, o.size)
+            }
+        }
+    }
+
+    func testBracketStaysInsideCanvas() {
+        let canvas = CGRect(origin: .zero, size: bracketSize)
+        for scale: CGFloat in [1, 2, 3] {
+            for rect in bracketRects(opening: true, scale: scale) + bracketRects(opening: false, scale: scale) {
+                XCTAssertTrue(canvas.contains(rect))
+            }
+        }
+    }
+
     // MARK: - clickAction
 
     func testRightClickShowsMenu() {

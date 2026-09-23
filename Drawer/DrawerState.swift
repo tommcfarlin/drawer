@@ -35,6 +35,35 @@ func accessibilityHelp(for state: DrawerState) -> String {
     state == .open ? "Click to close the drawer." : "Click to open the drawer."
 }
 
+/// The bracket images' size in points.
+let bracketSize = CGSize(width: 7, height: 16)
+
+/// The filled rectangles that make up `[` (or `]` when `opening` is false), in points,
+/// with every edge on a whole device pixel at the given backing scale so the strokes
+/// stay crisp on non-Retina displays. The stroke is 1.5pt on Retina (3px) and 1px at 1x,
+/// where 1.5px would be smoothed across two pixels.
+func bracketRects(opening: Bool, scale: CGFloat) -> [CGRect] {
+    let px = { (points: CGFloat) in (points * scale).rounded() }
+    let width = px(bracketSize.width)
+    let height = px(bracketSize.height)
+    let stroke = max(1, (1.5 * scale - 0.25).rounded())
+    let inset = px(1)
+    let armEnd = px(6)
+
+    // Built for `[` in device pixels, then mirrored for `]`.
+    var rects = [
+        CGRect(x: inset, y: inset, width: stroke, height: height - 2 * inset),           // spine
+        CGRect(x: inset, y: height - inset - stroke, width: armEnd - inset, height: stroke), // top arm
+        CGRect(x: inset, y: inset, width: armEnd - inset, height: stroke),               // bottom arm
+    ]
+    if !opening {
+        rects = rects.map { CGRect(x: width - $0.maxX, y: $0.minY, width: $0.width, height: $0.height) }
+    }
+    return rects.map {
+        CGRect(x: $0.minX / scale, y: $0.minY / scale, width: $0.width / scale, height: $0.height / scale)
+    }
+}
+
 /// SF Symbol shown by the front while the drawer is closed.
 let closedSymbolName = "archivebox"
 
