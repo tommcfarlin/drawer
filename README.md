@@ -8,33 +8,43 @@ A tiny macOS menu bar app that hides your menu bar icons with one click and brin
 
 ## How it works
 
-Drawer adds two things to your menu bar:
-
-- a **chevron** you click to collapse or expand, and
-- a thin **`|` divider** that marks where the drawer starts.
-
-Every icon to the **left** of the divider goes into the drawer when you collapse it. Your system icons (Wi-Fi, battery, Control Center, the clock) stay put.
+Drawer adds a pair of brackets to your menu bar: `[` on the left, `]` on the right. Anything you put between them is **in the drawer**.
 
 ```
-Expanded:   [Dropbox] [1Password] [Slack]  |  ›  [Wi-Fi] [Battery] [Control Center] [Clock]
-Collapsed:                                    ‹  [Wi-Fi] [Battery] [Control Center] [Clock]
+Open:    [ Dropbox 1Password Slack ]  Wi-Fi Battery Control-Center Clock
+Closed:                     (archive box)  Wi-Fi Battery Control-Center Clock
 ```
+
+Click the drawer to close it, and everything inside disappears, leaving a small archive box. Click the box to open it again.
 
 ## Setup
 
-1. Open Drawer. The chevron and the `|` divider appear in your menu bar.
-2. Hold **⌘ (Command)** and drag each icon you want hidden to the **left** of the `|` divider.
-3. Click the chevron. Everything left of the divider is tucked away.
+1. Open Drawer. A `[` and a `]` appear side by side in your menu bar.
+2. Hold **⌘ (Command)** and drag each icon you want to hide into the drawer, between `[` and `]`.
+3. Click `[` or `]` to close the drawer.
 
-Click the chevron again whenever you need those icons back. Drawer remembers whether it was open or closed the next time you launch it.
+Drawer remembers whether the drawer was open or closed the next time you launch it.
 
-New apps usually add their icons at the far left of the menu bar, so they end up in the drawer automatically.
+To keep an icon visible all the time, ⌘-drag it to the right of the `]`.
 
-**Tip:** Keep the divider to the left of the chevron. If the divider ends up on the right, Drawer won't collapse, so that the chevron can't hide itself.
+Before you start, read [Good to know](#good-to-know): closing the drawer also hides anything to the left of `[`.
+
+## Good to know
+
+- **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
+- **Keep `[` to the left of `]`.** If they get swapped, Drawer won't close; it beeps and tells you how to fix it.
+- **Can't find the archive box?** macOS sometimes hides menu bar icons when the menu bar is crowded. Open Drawer again (from Finder, Spotlight, or Launchpad) and the drawer opens.
 
 ## Menu
 
-Right-click the chevron for **About Drawer** and **Quit Drawer**.
+Right-click (or Control-click) `[`, `]`, or the archive box for:
+
+- **Close Drawer** / **Open Drawer**
+- **How to Use Drawer…** (opens this page)
+- **About Drawer**
+- **Quit Drawer**
+
+Hover over any of them to see what a click will do.
 
 ## Requirements
 
