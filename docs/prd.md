@@ -131,6 +131,7 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | F13 | Opening Drawer again while it's running opens the drawer. |
 | F14 | A refused or failed close is explained in the menu, not only with a beep. |
 | F15 | Each drawer item has a tooltip naming what a click will do. |
+| F16 | Opening and closing are instant, with a quick bounce on the drawer's own icon (the archive box on close, `]` on open); no bounce when Reduce Motion is on. |
 
 ### Non-functional
 
