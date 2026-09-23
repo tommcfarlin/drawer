@@ -1,6 +1,6 @@
 # Drawer
 
-A macOS menu bar app that hides icons left of a divider. The product is described in `docs/prd.md` and the technical design in `docs/spec.md`; read both before starting an issue.
+A macOS menu bar app with a `[ … ]` drawer: icons inside it hide when the drawer closes, leaving an archive box. The product is described in `docs/prd.md` and the technical design in `docs/spec.md`; read both before starting an issue.
 
 ## Command line only
 
@@ -44,9 +44,14 @@ Every issue has:
 ## Architecture
 
 - SwiftUI `App` entry point with `NSApplicationDelegateAdaptor`; no windows, `LSUIElement = YES`
-- AppKit `NSStatusItem`s (not `MenuBarExtra`): a chevron toggle and a `|` divider
-- Collapsing sets the divider's length to 10,000pt, which pushes items to its left off-screen
-- State is persisted in `UserDefaults` under `drawerState`
+- AppKit `NSStatusItem`s (not `MenuBarExtra`), left to right: `[` handle, `]` wall, front (SF Symbols `archivebox`, only in the menu bar while closed). All template images, never text
+- Icons between the handle and the wall are in the drawer. Closing shows the front, then sets the wall's length to 10,000pt, which pushes it, the handle, and everything left of it off-screen
+- A stretched item is moved entirely off-screen by macOS, and an empty item still takes 16pt and gets a hover highlight. That's why the front is separate and hidden while open; see `docs/spec.md` → How hiding works
+- Before showing the front, Drawer writes `NSStatusItem Preferred Position DrawerFront` (undocumented) = the wall's saved position − 1, so it lands just right of the wall; a safety net reopens the drawer if it doesn't. Positions are the distance from the screen's right edge to the item's right edge
+- Always test layout changes both on a fresh install and with dragged (saved) bracket positions; they behave differently
+- The menu bar reports placeholder frames for ~250 ms after launch; restoring a closed drawer waits for positions to settle
+- State is persisted in `UserDefaults` under `drawerState` (`open` / `closed`)
+- The menu bar can't be clicked from the command line (no Accessibility access); verify layout with `CGWindowListCopyWindowInfo` and ask Tom to click-test
 - Minimum macOS 26; universal binary; sandboxed; no permissions; no network
 
 ## Signing

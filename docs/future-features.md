@@ -9,12 +9,12 @@ On MacBooks with a notch, macOS silently hides status items that don't fit betwe
 Possible directions:
 
 - Detect a notched display (`NSScreen.safeAreaInsets` / `auxiliaryTopLeftArea`) and document the behavior.
-- Warn when the visible side of the divider is likely to overflow into the notch.
+- Warn when the icons outside the drawer are likely to overflow into the notch.
 
 ## Other candidates (not committed)
 
 - Launch at Login (`SMAppService.mainApp`)
-- Auto-collapse after N seconds
+- Auto-close the drawer after N seconds
 - Global keyboard shortcut to toggle
 - Automatic updates (Sparkle)
 - A custom app icon to replace the emoji (before 1.0.0?)
