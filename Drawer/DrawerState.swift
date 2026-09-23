@@ -151,3 +151,61 @@ func isNoOp(current: DrawerState, requested: DrawerState, userInitiated: Bool) -
 func restoredState(from rawValue: String?) -> DrawerState {
     rawValue.flatMap(DrawerState.init(rawValue:)) ?? .open
 }
+
+// MARK: - Notch
+
+/// A status item window on one display, as the window list reports it.
+struct MenuBarWindow: Equatable {
+    let minX: CGFloat
+    let width: CGFloat
+    let isOnScreen: Bool
+}
+
+/// How the notch affects the drawer on one display.
+enum NotchFit: Equatable {
+    /// Nothing of Drawer's is hidden (or there's nothing to say).
+    case allFit
+    /// The handle and some drawer icons are hidden; `visible` drawer icons still fit.
+    case drawerPartlyHidden(visible: Int)
+    /// Even the drawer's right edge (or, when closed, the archive box) is hidden.
+    case outsideDoesNotFit
+}
+
+/// Each display's copy of the menu bar may place an item up to about 2pt differently.
+let notchTolerance: CGFloat = 3
+
+/// Items sit the same distance from the right edge on every display's menu bar copy.
+func offsetFromRightEdge(itemMinX: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - itemMinX
+}
+
+func minX(atOffsetFromRightEdge offset: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - offset
+}
+
+/// Measures the drawer against one notched display's status item windows. The menu bar
+/// hides overflow from the left, so what's visible is always a rightmost run: if the
+/// handle is hidden, every on-screen window left of the wall is a drawer icon.
+///
+/// - Parameters:
+///   - handleMinX: where `[` sits on this display, or nil when the drawer is closed.
+///   - wallMinX: where `]` sits on this display, or the archive box when closed.
+func notchFit(items: [MenuBarWindow], handleMinX: CGFloat?, wallMinX: CGFloat?, tolerance: CGFloat = notchTolerance) -> NotchFit {
+    guard let wallMinX else { return .allFit }
+    let onScreen = items.filter(\.isOnScreen)
+    func isShowing(_ x: CGFloat) -> Bool { onScreen.contains { abs($0.minX - x) <= tolerance } }
+
+    guard isShowing(wallMinX) else { return .outsideDoesNotFit }
+    guard let handleMinX, !isShowing(handleMinX) else { return .allFit }
+    return .drawerPartlyHidden(visible: onScreen.filter { $0.minX < wallMinX - tolerance }.count)
+}
+
+/// The most serious of several displays' results.
+func worst(_ fits: [NotchFit]) -> NotchFit {
+    if fits.contains(.outsideDoesNotFit) { return .outsideDoesNotFit }
+    let partly = fits.compactMap { fit -> Int? in
+        if case let .drawerPartlyHidden(visible) = fit { return visible }
+        return nil
+    }
+    return partly.min().map { .drawerPartlyHidden(visible: $0) } ?? .allFit
+}
