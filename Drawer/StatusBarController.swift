@@ -124,7 +124,38 @@ final class StatusBarController: NSObject {
 
     @objc private func showAbout() {
         NSApp.activate()
-        NSApp.orderFrontStandardAboutPanel(nil)
+        NSApp.orderFrontStandardAboutPanel(options: [
+            .applicationName: "Drawer",
+            .applicationIcon: NSApp.applicationIconImage as Any,
+            .credits: Self.aboutCredits,
+        ])
+    }
+
+    private static var aboutCredits: NSAttributedString {
+        let style = NSMutableParagraphStyle()
+        style.alignment = .center
+
+        let attributes: [NSAttributedString.Key: Any] = [
+            .font: NSFont.systemFont(ofSize: 11),
+            .foregroundColor: NSColor.labelColor,
+            .paragraphStyle: style,
+        ]
+
+        func link(_ title: String, _ url: String) -> NSAttributedString {
+            var linkAttributes = attributes
+            linkAttributes[.link] = URL(string: url)!
+            return NSAttributedString(string: title, attributes: linkAttributes)
+        }
+
+        let credits = NSMutableAttributedString()
+        credits.append(NSAttributedString(
+            string: "Throw your menu bar icons into a drawer. Pull them out when you need them.\n\n",
+            attributes: attributes
+        ))
+        credits.append(link("Pressware", "https://pressware.co?ref=drawer"))
+        credits.append(NSAttributedString(string: " · ", attributes: attributes))
+        credits.append(link("Contact", "mailto:support@pressware.co"))
+        return credits
     }
 
     private func apply(_ state: DrawerState) {
