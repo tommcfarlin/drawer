@@ -26,11 +26,15 @@ func wallLength(for state: DrawerState) -> CGFloat {
     state == .closed ? wallClosedLength : NSStatusItem.variableLength
 }
 
-/// The menu bar orders items by a saved "preferred position": the distance from
-/// the screen's right edge to the item's left edge, larger meaning further left.
-/// Just under the wall's value puts the front immediately right of the wall.
-func frontPreferredPosition(wallMinX: CGFloat, screenMaxX: CGFloat) -> CGFloat {
-    screenMaxX - wallMinX - 1
+/// The menu bar orders items by a saved "preferred position": the distance from the
+/// screen's right edge to the item's right edge, larger meaning further left.
+func preferredPosition(itemMaxX: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - itemMaxX
+}
+
+/// Just under the wall's preferred position puts the front immediately right of it.
+func frontPreferredPosition(wallPosition: CGFloat) -> CGFloat {
+    wallPosition - 1
 }
 
 /// Closing only makes sense when the handle is left of the wall.

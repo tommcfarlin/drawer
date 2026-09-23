@@ -46,15 +46,19 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(wallLength(for: .open), NSStatusItem.variableLength)
     }
 
-    // MARK: - frontPreferredPosition
+    // MARK: - preferred positions
 
-    func testFrontPositionIsJustRightOfWall() {
-        // Wall's left edge 1449pt into a 2560pt screen: 1111pt from the right edge.
-        XCTAssertEqual(frontPreferredPosition(wallMinX: 1449, screenMaxX: 2560), 1110)
+    func testPreferredPositionMatchesWhatTheMenuBarSaves() {
+        // Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as 433.
+        XCTAssertEqual(preferredPosition(itemMaxX: 2127, screenMaxX: 2560), 433)
     }
 
-    func testFrontPositionOnSecondaryScreen() {
-        XCTAssertEqual(frontPreferredPosition(wallMinX: -200, screenMaxX: 0), 199)
+    func testPreferredPositionOnSecondaryScreen() {
+        XCTAssertEqual(preferredPosition(itemMaxX: -200, screenMaxX: 0), 200)
+    }
+
+    func testFrontSortsJustRightOfWall() {
+        XCTAssertEqual(frontPreferredPosition(wallPosition: 433), 432)
     }
 
     // MARK: - canClose
