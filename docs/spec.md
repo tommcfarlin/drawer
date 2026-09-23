@@ -79,6 +79,7 @@ This technique uses only public API and needs no permissions. It's the same basi
 | `Drawer/DrawerApp.swift` | `@main` SwiftUI `App`; `NSApplicationDelegateAdaptor`; an empty `Settings` scene |
 | `Drawer/AppDelegate.swift` | Creates `StatusBarController` on launch |
 | `Drawer/StatusBarController.swift` | Owns the three status items, handles clicks, applies state, restores state at launch, right-click menu, About panel |
+| `Drawer/MenuBarWindows.swift` | Reads each notched display's status item windows (positions, widths, on-screen) from the window list; no permissions |
 | `Drawer/DrawerState.swift` | Pure, testable logic (state, symbol name, wall length, front position, close guard, placement check) |
 | `Drawer/Info.plist` | `LSUIElement = YES`; version from build settings; copyright |
 | `Drawer/Assets.xcassets/AppIcon.appiconset` | App icon rendered from the 🗄️ emoji at every required size (16–1024 px) |
@@ -277,13 +278,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (51):
+Unit tests (61):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- Notch: `notchFit` for partly hidden (with tolerance), all fit, none fit, wall hidden, closed with the front showing or hidden, unknown wall; right-edge offsets round-trip across displays; `worst` picks the most serious result.
 - `seededFrontPosition`: follows the wall's saved position; nothing without one.
 - `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
