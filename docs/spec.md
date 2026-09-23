@@ -46,8 +46,9 @@ macOS lays status items out right-to-left and drops items that don't fit. Drawer
 
 A status item that's shown again with `isVisible = true` lands wherever its saved "preferred position" says. macOS doesn't save one for an item that has never been dragged, so without one the front reappears at the far left, which is off-screen while the drawer is closed. Before showing the front, Drawer writes its position itself:
 
-- Key: `NSStatusItem Preferred Position DrawerFront` in Drawer's `UserDefaults`.
-- Value: `frontPreferredPosition(wallMinX:screenMaxX:)` = the screen's right edge − the wall's left edge − 1. Positions are measured from the screen's right edge to the item's **left** edge, and a larger value means further left, so this puts the front just right of the wall.
+- Positions are keyed `NSStatusItem Preferred Position <autosave name>` in Drawer's `UserDefaults`. Each value is the distance from the screen's right edge to the item's **right** edge (`preferredPosition(itemMaxX:screenMaxX:)`), and items are ordered by it: larger means further left. Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as `433`.
+- Positions only order reliably against other saved positions. If the wall has none yet (it has never been dragged), Drawer records where it already is, which doesn't move it.
+- The front's position is `frontPreferredPosition(wallPosition:)` = the wall's position − 1, which sorts it immediately right of the wall.
 - **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself and logs an error.
 
 This key is undocumented AppKit behavior. The safety net keeps a future macOS change from stranding the user.
@@ -93,7 +94,8 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 | `closedSymbolName` | `archivebox` |
 | `wallClosedLength` | `10_000` |
 | `wallLength(for:)` | Closed: `10_000`. Open: `variableLength`. |
-| `frontPreferredPosition(wallMinX:screenMaxX:)` | `screenMaxX - wallMinX - 1` |
+| `preferredPosition(itemMaxX:screenMaxX:)` | `screenMaxX - itemMaxX` |
+| `frontPreferredPosition(wallPosition:)` | `wallPosition - 1` |
 | `canClose(handleMinX:wallMinX:)` | `true` only if both are known and the handle is strictly left of the wall |
 | `isPlaced(_:on:)` | `true` if the frame has size and sits entirely inside one of the screens |
 | `restoredState(from:)` | Saved raw value, or `.open` if it's missing or unrecognized |
@@ -119,7 +121,7 @@ All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMou
 
 1. When closing, check `canClose` against the handle's and wall's `button.window.frame.minX`. If it fails, log it, beep (unless told not to), and stay open.
 2. Apply the state:
-   - Closing: write the front's preferred position, show the front, schedule the safety-net check, then stretch the wall.
+   - Closing: make sure the wall has a saved position, write the front's position just below it, show the front, schedule the safety-net check, then stretch the wall.
    - Opening: shrink the wall, then hide the front.
    - Update the accessibility label on all three.
 3. Save `state.rawValue` to `UserDefaults` under `drawerState`.
@@ -164,7 +166,8 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 | Key | Store | Type | Default | Purpose |
 |-----|-------|------|---------|---------|
 | `drawerState` | `UserDefaults` | String (`open` / `closed`) | `open` | Last drawer state |
-| `NSStatusItem Preferred Position DrawerHandle` / `DrawerWall` | `UserDefaults` (managed by AppKit) | Number | — | Positions the user dragged the brackets to |
+| `NSStatusItem Preferred Position DrawerHandle` | `UserDefaults` (managed by AppKit) | Number | — | Where the user dragged `[` |
+| `NSStatusItem Preferred Position DrawerWall` | `UserDefaults` (managed by AppKit; recorded by Drawer if missing) | Number | — | Where `]` is |
 | `NSStatusItem Preferred Position DrawerFront` | `UserDefaults` (written by Drawer before showing the front) | Number | — | Puts the closed drawer just right of the wall |
 
 ## Edge cases
@@ -203,13 +206,13 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (28):
+Unit tests (29):
 
 - `toggled` flips both ways.
 - `showsFront` is false when open and true when closed; `closedSymbolName` is `archivebox`.
 - `accessibilityLabel` is "Close drawer" when open and "Open drawer" when closed.
 - `wallLength(for:)` is `10_000` when closed and `variableLength` when open.
-- `frontPreferredPosition` is the screen's right edge − the wall's left edge − 1, on the main screen and on a secondary screen.
+- `preferredPosition` matches what the menu bar saves (a wall spanning x 2104–2127 on a 2560pt screen → `433`) and works on a secondary screen; `frontPreferredPosition` is the wall's position − 1.
 - `canClose`: handle left of wall → true; handle right of wall → false; equal → false; either nil → false.
 - `restoredState`: nil, garbage, or a value from the old design (`collapsed`) → `.open`; valid raw values round-trip.
 - `isPlaced`: inside the main or a secondary screen → true; zero height, below every screen, past the right edge, or no screens → false.
@@ -218,7 +221,7 @@ Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't
 
 - Open: `[` and `]` are on-screen next to each other, and the next icon starts immediately after `]` (no gap).
 - Closed: `[` and `]` are off-screen, and the archive box is on-screen immediately left of the first always-visible icon.
-- Repeated open/close cycles and relaunches in each saved state produce identical layouts.
+- Repeated open/close cycles and relaunches in each saved state produce identical layouts, both on a fresh install and after the brackets have been dragged (so the menu bar has saved their positions).
 
 Manual QA checklist:
 

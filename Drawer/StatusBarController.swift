@@ -15,6 +15,7 @@ final class StatusBarController: NSObject {
     private static let restoreInterval: TimeInterval = 0.1
     private static let restoreMaxAttempts = 30
     private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
+    private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
     /// How long to wait after closing before confirming the front is on screen.
     private static let frontCheckDelay: TimeInterval = 0.3
 
@@ -138,12 +139,7 @@ final class StatusBarController: NSObject {
             // A re-shown item lands wherever its saved position says, and the menu bar
             // doesn't save one on its own. Point it just right of the wall, and show it
             // before the wall stretches so it isn't pushed off-screen with it.
-            if let wall = wallItem.button?.window, let screen = wall.screen {
-                UserDefaults.standard.set(
-                    frontPreferredPosition(wallMinX: wall.frame.minX, screenMaxX: screen.frame.maxX),
-                    forKey: Self.frontPositionKey
-                )
-            }
+            positionFrontNextToWall()
             frontItem.isVisible = true
             confirmFrontIsShowing()
         }
@@ -153,6 +149,22 @@ final class StatusBarController: NSObject {
         for item in [handleItem, wallItem, frontItem] {
             item.button?.setAccessibilityLabel(state.accessibilityLabel)
         }
+    }
+
+    /// Positions only order correctly against other saved positions, so make sure the
+    /// wall has one (recording where it already is doesn't move it), then place the
+    /// front just below it.
+    private func positionFrontNextToWall() {
+        let defaults = UserDefaults.standard
+        var wallPosition = defaults.object(forKey: Self.wallPositionKey) as? Double
+        if wallPosition == nil, let wall = wallItem.button?.window, let screen = wall.screen {
+            wallPosition = preferredPosition(itemMaxX: wall.frame.maxX, screenMaxX: screen.frame.maxX)
+            defaults.set(wallPosition, forKey: Self.wallPositionKey)
+        }
+        guard let wallPosition else { return }
+        let front = frontPreferredPosition(wallPosition: wallPosition)
+        defaults.set(front, forKey: Self.frontPositionKey)
+        Self.log.debug("wall position \(wallPosition, privacy: .public), front position \(front, privacy: .public)")
     }
 
     /// Safety net: if the front didn't land on screen, there'd be nothing to click to
