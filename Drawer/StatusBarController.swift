@@ -50,6 +50,14 @@ final class StatusBarController: NSObject {
             button.target = self
             button.action = #selector(itemClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
+            // VoiceOver can't right-click, so offer the menu as a custom action.
+            button.setAccessibilityCustomActions([
+                NSAccessibilityCustomAction(name: "Show Menu") { [weak self, weak item] in
+                    guard let self, let item else { return false }
+                    self.showMenu(from: item)
+                    return true
+                },
+            ])
         }
 
         let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
@@ -116,13 +124,12 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func itemClicked(_ sender: NSStatusBarButton) {
-        guard let event = NSApp.currentEvent else { return }
-        let wantsMenu = event.type == .rightMouseUp
-            || (event.type == .leftMouseUp && event.modifierFlags.contains(.control))
-        if wantsMenu {
+        let event = NSApp.currentEvent
+        switch clickAction(eventType: event?.type, modifiers: event?.modifierFlags ?? []) {
+        case .showMenu:
             let item = [handleItem, wallItem, frontItem].first { $0.button === sender } ?? wallItem
             showMenu(from: item)
-        } else {
+        case .toggle:
             setState(state.toggled)
         }
     }
