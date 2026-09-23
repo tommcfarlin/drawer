@@ -213,15 +213,23 @@ No permission-free fix can reveal hidden icons: the notch hides a leftmost run, 
 - `makeMenu` shows them at the top when there's no other notice (a refused or failed close takes priority).
 - The tooltip of `]` (or of the front, when closed) becomes the action title, a newline, and the first line.
 
+### While closed, and before items are placed
+
+- `currentNotchFit()` returns `fit: nil` when Drawer's own items haven't been laid out yet (for example, `[` is still off-screen for about 0.5 s after opening). An unknown result is never treated as "all fit" and never saved.
+- While open, a measured result is saved as `notchVisibleWhenOpen` (the visible count; removed when all fit) along with `notchDisplays`, a signature of the notched displays (ID, size, and space beside the notch). If the signature changes or no notched display remains, both are cleared.
+- `notchFitToExplain(hasNotch:state:current:lastOpen:)` (pure) chooses what to explain: nothing without a notch; the outside-doesn't-fit warning always; otherwise the current measurement while open, falling back to the saved one when it's unknown or the drawer is closed. A closed drawer uses the "When Open, …" wording.
+
 ### When it's refreshed
 
-On every state change, each time the menu opens, and on `NSApplication.didChangeScreenParametersNotification`. There's no polling. A tooltip can be briefly stale after you ⌘-drag icons; opening the menu or changing state refreshes it.
+On every state change (0.4 s later, retrying up to five times, 0.4 s apart, while positions are still unknown), each time the menu opens, and on `NSApplication.didChangeScreenParametersNotification`. There's no polling. A tooltip can be briefly stale after you ⌘-drag icons; opening the menu or changing state refreshes it.
 
 ## Persistence
 
 | Key | Store | Type | Default | Purpose |
 |-----|-------|------|---------|---------|
 | `drawerState` | `UserDefaults` | String (`open` / `closed`) | `open` | Last drawer state |
+| `notchVisibleWhenOpen` | `UserDefaults` | Int | — | Drawer icons that fit beside the notch when last measured open |
+| `notchDisplays` | `UserDefaults` | String | — | Notched displays that measurement applies to |
 | `NSStatusItem Preferred Position DrawerHandle` | `UserDefaults` (managed by AppKit) | Number | — | Where the user dragged `[` |
 | `NSStatusItem Preferred Position DrawerWall` | `UserDefaults` (managed by AppKit; recorded by Drawer if missing) | Number | — | Where `]` is |
 | `NSStatusItem Preferred Position DrawerFront` | `UserDefaults` (written by Drawer before showing the front) | Number | — | Puts the closed drawer just right of the wall |
@@ -278,13 +286,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (67):
+Unit tests (73):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- Notch while closed: "When Open, …" wording; `notchFitToExplain` shows nothing without a notch, uses the current fit when open, the last open fit when closed or unmeasured, and always the outside warning.
 - Notch: `notchHint` for all fit (none), many/one/zero visible, and the outside-doesn't-fit warning; the warning outranks partly hidden.
 - Notch: `notchFit` for partly hidden (with tolerance), all fit, none fit, wall hidden, closed with the front showing or hidden, unknown wall; right-edge offsets round-trip across displays; `worst` picks the most serious result.
 - `seededFrontPosition`: follows the wall's saved position; nothing without one.
