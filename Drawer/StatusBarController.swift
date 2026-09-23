@@ -34,6 +34,11 @@ final class StatusBarController: NSObject {
     private var lastChangeWasUserInitiated = false
 
     override init() {
+        // The front is created before anything can be measured. Without a saved
+        // position it would land at the far left of the menu bar, where a closed drawer
+        // pushes it off-screen. If the wall has a saved position, seed the front's.
+        Self.seedFrontPosition()
+
         // New status items are inserted to the left of existing ones, so create them
         // right to left: front, wall, handle.
         frontItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -217,12 +222,16 @@ final class StatusBarController: NSObject {
     }
 
     private func apply(_ state: DrawerState) {
-        if state.showsFront && !frontItem.isVisible {
-            // A re-shown item lands wherever its saved position says, and the menu bar
-            // doesn't save one on its own. Point it just right of the wall, and show it
-            // before the wall stretches so it isn't pushed off-screen with it.
-            positionFrontNextToWall()
-            frontItem.isVisible = true
+        if state.showsFront {
+            if !frontItem.isVisible {
+                // A re-shown item lands wherever its saved position says, and the menu
+                // bar doesn't save one on its own. Point it just right of the wall, and
+                // show it before the wall stretches so it isn't pushed off-screen with it.
+                positionFrontNextToWall()
+                frontItem.isVisible = true
+            }
+            // Every close is checked, including a launch into the closed state: a
+            // missing front means there's nothing to click to get the icons back.
             confirmFrontIsShowing()
         }
         wallItem.length = wallLength(for: state)
@@ -233,6 +242,12 @@ final class StatusBarController: NSObject {
             item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
             item.button?.toolTip = state.menuActionTitle
         }
+    }
+
+    private static func seedFrontPosition() {
+        let defaults = UserDefaults.standard
+        guard let seeded = seededFrontPosition(savedWallPosition: defaults.object(forKey: wallPositionKey) as? Double) else { return }
+        defaults.set(seeded, forKey: frontPositionKey)
     }
 
     /// Positions only order correctly against other saved positions, so make sure the
