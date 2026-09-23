@@ -14,6 +14,7 @@ final class StatusBarController: NSObject {
 
     private let toggleItem: NSStatusItem
     private let dividerItem: NSStatusItem
+    private let menu = NSMenu()
     private(set) var state: DrawerState = .expanded
 
     override init() {
@@ -34,6 +35,13 @@ final class StatusBarController: NSObject {
             button.action = #selector(toggleClicked(_:))
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
+
+        let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
+        about.target = self
+        menu.addItem(about)
+        menu.addItem(.separator())
+        let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
+        menu.addItem(quit)
 
         if let button = dividerItem.button {
             button.appearsDisabled = true
@@ -97,8 +105,26 @@ final class StatusBarController: NSObject {
     }
 
     @objc private func toggleClicked(_ sender: NSStatusBarButton) {
-        guard NSApp.currentEvent?.type != .rightMouseUp else { return }
-        setState(state.toggled)
+        guard let event = NSApp.currentEvent else { return }
+        let wantsMenu = event.type == .rightMouseUp
+            || (event.type == .leftMouseUp && event.modifierFlags.contains(.control))
+        if wantsMenu {
+            showMenu()
+        } else {
+            setState(state.toggled)
+        }
+    }
+
+    /// Attach the menu only while it's open so a plain left-click keeps toggling.
+    private func showMenu() {
+        toggleItem.menu = menu
+        toggleItem.button?.performClick(nil)
+        toggleItem.menu = nil
+    }
+
+    @objc private func showAbout() {
+        NSApp.activate()
+        NSApp.orderFrontStandardAboutPanel(nil)
     }
 
     private func apply(_ state: DrawerState) {
