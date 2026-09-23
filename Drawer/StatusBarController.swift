@@ -144,6 +144,12 @@ final class StatusBarController: NSObject {
         }
     }
 
+    private static let helpURL = URL(string: "https://github.com/tommcfarlin/drawer#setup")!
+
+    @objc private func showHelp() {
+        NSWorkspace.shared.open(Self.helpURL)
+    }
+
     private static let misplacedHandleNotice = "Move [ to the Left of ] to Use the Drawer"
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
@@ -170,6 +176,10 @@ final class StatusBarController: NSObject {
         toggle.target = self
         menu.addItem(toggle)
         menu.addItem(.separator())
+
+        let help = NSMenuItem(title: "How to Use Drawer…", action: #selector(showHelp), keyEquivalent: "")
+        help.target = self
+        menu.addItem(help)
 
         let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
         about.target = self
