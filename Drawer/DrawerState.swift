@@ -12,9 +12,27 @@ enum DrawerState: String {
 
     /// The menu command for what clicking the drawer will do next.
     var menuActionTitle: String { self == .open ? "Close Drawer" : "Open Drawer" }
+}
 
-    /// What clicking the drawer will do next.
-    var accessibilityLabel: String { self == .open ? "Close drawer" : "Open drawer" }
+/// Drawer's three menu bar items.
+enum DrawerPart: CaseIterable {
+    case handle
+    case wall
+    case front
+}
+
+/// Each part gets its own VoiceOver name, so the two brackets don't sound identical.
+func accessibilityLabel(for part: DrawerPart) -> String {
+    switch part {
+    case .handle: return "Drawer, left edge"
+    case .wall: return "Drawer, right edge"
+    case .front: return "Closed drawer"
+    }
+}
+
+/// What activating any part will do next.
+func accessibilityHelp(for state: DrawerState) -> String {
+    state == .open ? "Click to close the drawer." : "Click to open the drawer."
 }
 
 /// SF Symbol shown by the front while the drawer is closed.

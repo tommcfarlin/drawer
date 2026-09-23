@@ -66,6 +66,10 @@ final class StatusBarController: NSObject {
         restoreSavedState()
     }
 
+    private var parts: [(DrawerPart, NSStatusItem)] {
+        [(.handle, handleItem), (.wall, wallItem), (.front, frontItem)]
+    }
+
     /// The menu bar positions its items shortly after launch, reporting placeholder
     /// frames along the way. Wait until all three items sit on a screen and have
     /// stopped moving before restoring, so the close guard sees real positions and
@@ -189,8 +193,9 @@ final class StatusBarController: NSObject {
         wallItem.length = wallLength(for: state)
         if !state.showsFront { frontItem.isVisible = false }
 
-        for item in [handleItem, wallItem, frontItem] {
-            item.button?.setAccessibilityLabel(state.accessibilityLabel)
+        for (part, item) in parts {
+            item.button?.setAccessibilityLabel(accessibilityLabel(for: part))
+            item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
         }
     }
 

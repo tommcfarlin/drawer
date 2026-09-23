@@ -36,14 +36,25 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(DrawerState.closed.menuActionTitle, "Open Drawer")
     }
 
-    // MARK: - accessibilityLabel
+    // MARK: - accessibility
 
-    func testOpenAccessibilityLabel() {
-        XCTAssertEqual(DrawerState.open.accessibilityLabel, "Close drawer")
+    func testEachPartHasADistinctLabel() {
+        let labels = DrawerPart.allCases.map(accessibilityLabel(for:))
+        XCTAssertEqual(Set(labels).count, DrawerPart.allCases.count)
     }
 
-    func testClosedAccessibilityLabel() {
-        XCTAssertEqual(DrawerState.closed.accessibilityLabel, "Open drawer")
+    func testPartLabels() {
+        XCTAssertEqual(accessibilityLabel(for: .handle), "Drawer, left edge")
+        XCTAssertEqual(accessibilityLabel(for: .wall), "Drawer, right edge")
+        XCTAssertEqual(accessibilityLabel(for: .front), "Closed drawer")
+    }
+
+    func testOpenHelpDescribesClosing() {
+        XCTAssertEqual(accessibilityHelp(for: .open), "Click to close the drawer.")
+    }
+
+    func testClosedHelpDescribesOpening() {
+        XCTAssertEqual(accessibilityHelp(for: .closed), "Click to open the drawer.")
     }
 
     // MARK: - wallLength
