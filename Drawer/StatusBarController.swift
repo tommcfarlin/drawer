@@ -74,6 +74,8 @@ final class StatusBarController: NSObject {
         for (face, item) in [(wallFace, wallItem), (frontFace, frontItem)] {
             face.isHidden = true
             face.wantsLayer = true
+            // Purely visual; the button already carries the label and help.
+            face.setAccessibilityElement(false)
             item.button?.addSubview(face)
         }
 
@@ -123,6 +125,7 @@ final class StatusBarController: NSObject {
     /// left of the wall.
     @discardableResult
     func setState(_ newState: DrawerState, userInitiated: Bool = true) -> Bool {
+        guard !isNoOp(current: state, requested: newState, userInitiated: userInitiated) else { return true }
         let handleMinX = handleItem.button?.window?.frame.minX
         let wallMinX = wallItem.button?.window?.frame.minX
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")

@@ -92,6 +92,7 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 |--------|----------|
 | `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `menuActionTitle` ("Close Drawer" / "Open Drawer") |
 | `enum DrawerPart { handle, wall, front }` | `accessibilityLabel(for:)`; `accessibilityHelp(for: DrawerState)` |
+| `isNoOp(current:requested:userInitiated:)` | `true` when the user asks for the current state; launch restores always apply |
 | `clickAction(eventType:modifiers:)` | `.showMenu` for right-up or Control + left-up; otherwise `.toggle` |
 | `bracketSize`, `bracketRects(opening:scale:)` | Pixel-aligned rectangles for `[` / `]` |
 | `closedSymbolName` | `archivebox` |
@@ -132,7 +133,7 @@ Opening and closing are instant; the motion is a quick bounce on Drawer's own ic
 
 ### Reopening from outside
 
-`AppDelegate.applicationShouldHandleReopen` opens the drawer whenever Drawer is opened again while running. This is the way back if macOS hides the archive box later (a crowded menu bar, the notch, or System Settings → Menu Bar).
+`AppDelegate.applicationShouldHandleReopen` opens the drawer whenever Drawer is opened again while running. If it's already open, nothing happens (`isNoOp`), so there's no bounce either. This is the way back if macOS hides the archive box later (a crowded menu bar, the notch, or System Settings → Menu Bar).
 
 ### Opening and closing
 
@@ -223,6 +224,10 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 - The built app bundles `en.lproj/Localizable.strings`. No other languages yet.
 - Unit tests run outside the app bundle, so lookups fall back to the English keys, which the tests assert.
 
+## Known issues
+
+- **AppKit layout warning at launch (low):** Release builds sometimes log once, from AppKit, *"It's not legal to call -layoutSubtreeIfNeeded on a view which is already being laid out."* It predates the bounce, appears during the system's own status item scene setup (alongside Control Center scene-client errors), and didn't reproduce under the debugger with a breakpoint on `_NSDetectedLayoutRecursion`. No visible effect. Revisit if it becomes reproducible.
+
 ## Security and privacy
 
 - App Sandbox on, with no extra entitlements.
@@ -240,13 +245,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (46):
+Unit tests (49):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
 
 Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):

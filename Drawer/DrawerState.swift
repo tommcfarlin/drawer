@@ -134,6 +134,13 @@ func clickAction(eventType: NSEvent.EventType?, modifiers: NSEvent.ModifierFlags
     }
 }
 
+/// A user asking for the state the drawer is already in (for example, opening Drawer
+/// again while it's open) changes nothing. Launch restores always apply, because the
+/// items start in a provisional layout.
+func isNoOp(current: DrawerState, requested: DrawerState, userInitiated: Bool) -> Bool {
+    userInitiated && current == requested
+}
+
 /// Default for first launch (or an unrecognized saved value) is open.
 func restoredState(from rawValue: String?) -> DrawerState {
     rawValue.flatMap(DrawerState.init(rawValue:)) ?? .open
