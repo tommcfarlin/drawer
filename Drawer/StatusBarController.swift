@@ -286,6 +286,31 @@ final class StatusBarController: NSObject {
         }
     }
 
+    // MARK: - Notch
+
+    /// How the notch affects the drawer, worst case across notched displays.
+    func currentNotchFit() -> NotchFit {
+        // Drawer's own frames may come from any display's menu bar copy; carry each one
+        // over to the notched display by its distance from the right edge.
+        func offset(of item: NSStatusItem) -> CGFloat? {
+            guard let window = item.button?.window, let screen = window.screen, item.isVisible else { return nil }
+            return offsetFromRightEdge(itemMinX: window.frame.minX, screenMaxX: screen.frame.maxX)
+        }
+        let handleOffset = state == .open ? offset(of: handleItem) : nil
+        let edgeOffset = state == .open ? offset(of: wallItem) : offset(of: frontItem)
+
+        let fits = MenuBarWindows.notchedDisplays().map { display in
+            notchFit(
+                items: display.windows,
+                handleMinX: handleOffset.map { minX(atOffsetFromRightEdge: $0, screenMaxX: display.screenMaxX) },
+                wallMinX: edgeOffset.map { minX(atOffsetFromRightEdge: $0, screenMaxX: display.screenMaxX) }
+            )
+        }
+        let result = worst(fits)
+        Self.log.debug("notch fit: \(String(describing: result), privacy: .public) across \(fits.count, privacy: .public) notched display(s)")
+        return result
+    }
+
     // MARK: - Bounce
 
     /// A quick bounce on the drawer's own icon: the archive box as it shuts, `]` as it
