@@ -276,4 +276,133 @@ final class DrawerStateTests: XCTestCase {
     func testNotPlacedWithNoScreens() {
         XCTAssertFalse(isPlaced(CGRect(x: 1410, y: 1410, width: 24, height: 30), on: []))
     }
+
+    // MARK: - notchFit
+
+    /// Tom's MacBook with the drawer open (x positions from the window list): the handle
+    /// and two drawer icons are hidden, three drawer icons fit, then `]` and two more.
+    private let macBook: [MenuBarWindow] = [
+        MenuBarWindow(minX: -900, width: 23, isOnScreen: false),   // [
+        MenuBarWindow(minX: -877, width: 35, isOnScreen: false),
+        MenuBarWindow(minX: -842, width: 38, isOnScreen: false),
+        MenuBarWindow(minX: -734, width: 32, isOnScreen: true),
+        MenuBarWindow(minX: -702, width: 38, isOnScreen: true),
+        MenuBarWindow(minX: -664, width: 34, isOnScreen: true),
+        MenuBarWindow(minX: -454, width: 23, isOnScreen: true),    // ]
+        MenuBarWindow(minX: -431, width: 38, isOnScreen: true),
+        MenuBarWindow(minX: -393, width: 42, isOnScreen: true),
+    ]
+
+    func testDrawerPartlyHiddenCountsVisibleDrawerIcons() {
+        XCTAssertEqual(notchFit(items: macBook, handleMinX: -900, wallMinX: -454), .drawerPartlyHidden(visible: 3))
+    }
+
+    func testMatchesWithinTolerance() {
+        XCTAssertEqual(notchFit(items: macBook, handleMinX: -902, wallMinX: -456), .drawerPartlyHidden(visible: 3))
+    }
+
+    func testAllFitWhenHandleIsShowing() {
+        let items = macBook.map { MenuBarWindow(minX: $0.minX, width: $0.width, isOnScreen: true) }
+        XCTAssertEqual(notchFit(items: items, handleMinX: -900, wallMinX: -454), .allFit)
+    }
+
+    func testNoDrawerIconsFit() {
+        let items = macBook.map { MenuBarWindow(minX: $0.minX, width: $0.width, isOnScreen: $0.minX >= -454) }
+        XCTAssertEqual(notchFit(items: items, handleMinX: -900, wallMinX: -454), .drawerPartlyHidden(visible: 0))
+    }
+
+    func testOutsideDoesNotFitWhenWallIsHidden() {
+        let items = macBook.map { MenuBarWindow(minX: $0.minX, width: $0.width, isOnScreen: $0.minX > -454) }
+        XCTAssertEqual(notchFit(items: items, handleMinX: -900, wallMinX: -454), .outsideDoesNotFit)
+    }
+
+    func testClosedDrawerFitsWhenFrontIsShowing() {
+        XCTAssertEqual(notchFit(items: macBook, handleMinX: nil, wallMinX: -454), .allFit)
+    }
+
+    func testClosedDrawerOutsideDoesNotFitWhenFrontIsHidden() {
+        XCTAssertEqual(notchFit(items: macBook, handleMinX: nil, wallMinX: -1200), .outsideDoesNotFit)
+    }
+
+    func testUnknownWallSaysNothing() {
+        XCTAssertEqual(notchFit(items: macBook, handleMinX: -900, wallMinX: nil), .allFit)
+    }
+
+    func testRightEdgeOffsetRoundTripsAcrossDisplays() {
+        // `]` at x 2104 on a 2560pt display maps to x -456 on a display ending at x 0.
+        let offset = offsetFromRightEdge(itemMinX: 2104, screenMaxX: 2560)
+        XCTAssertEqual(minX(atOffsetFromRightEdge: offset, screenMaxX: 0), -456)
+    }
+
+    func testWorstPicksMostSeriousResult() {
+        XCTAssertEqual(worst([]), .allFit)
+        XCTAssertEqual(worst([.allFit, .drawerPartlyHidden(visible: 5), .drawerPartlyHidden(visible: 2)]), .drawerPartlyHidden(visible: 2))
+        XCTAssertEqual(worst([.drawerPartlyHidden(visible: 2), .outsideDoesNotFit]), .outsideDoesNotFit)
+    }
+
+    // MARK: - notchHint
+
+    func testNoHintWhenEverythingFits() {
+        XCTAssertEqual(notchHint(for: .allFit), [])
+    }
+
+    func testHintForManyVisibleIcons() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 8)), [
+            "Only the 8 Icons Nearest ] Fit Beside the Notch",
+            "⌘-Drag Your Favorites Next to ]",
+        ])
+    }
+
+    func testHintForOneVisibleIcon() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 1)).first, "Only the Icon Nearest ] Fits Beside the Notch")
+    }
+
+    func testHintWhenNoDrawerIconsFit() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 0)).first, "No Drawer Icons Fit Beside the Notch")
+    }
+
+    func testWarningWhenOutsideDoesNotFit() {
+        XCTAssertEqual(notchHint(for: .outsideDoesNotFit), [
+            "Too Many Icons Outside the Drawer to Fit Beside the Notch",
+            "⌘-Drag Some Icons Into the Drawer",
+        ])
+    }
+
+    func testWarningOutranksPartlyHidden() {
+        XCTAssertEqual(worst([.drawerPartlyHidden(visible: 3), .outsideDoesNotFit, .allFit]), .outsideDoesNotFit)
+    }
+
+    // MARK: - notch hint while closed
+
+    func testClosedHintDescribesTheOpenDrawer() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 8), drawerIsOpen: false), [
+            "When Open, Only the 8 Icons Nearest ] Fit Beside the Notch",
+            "Open the Drawer and ⌘-Drag Your Favorites Next to ]",
+        ])
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 1), drawerIsOpen: false).first, "When Open, Only the Icon Nearest ] Fits Beside the Notch")
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 0), drawerIsOpen: false).first, "When Open, No Drawer Icons Fit Beside the Notch")
+    }
+
+    func testNothingToExplainWithoutANotch() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: false, state: .closed, current: .allFit, lastOpen: .drawerPartlyHidden(visible: 8)), .allFit)
+        XCTAssertEqual(notchFitToExplain(hasNotch: false, state: .open, current: .outsideDoesNotFit, lastOpen: nil), .allFit)
+    }
+
+    func testOpenDrawerExplainsCurrentMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: .drawerPartlyHidden(visible: 8), lastOpen: .drawerPartlyHidden(visible: 3)), .drawerPartlyHidden(visible: 8))
+    }
+
+    func testClosedDrawerExplainsLastOpenMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .allFit, lastOpen: .drawerPartlyHidden(visible: 8)), .drawerPartlyHidden(visible: 8))
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .allFit, lastOpen: nil), .allFit)
+    }
+
+    func testOutsideWarningWinsWhenClosed() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .closed, current: .outsideDoesNotFit, lastOpen: .drawerPartlyHidden(visible: 8)), .outsideDoesNotFit)
+    }
+
+    func testUnmeasuredOpenDrawerFallsBackToLastMeasurement() {
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: .drawerPartlyHidden(visible: 8)), .drawerPartlyHidden(visible: 8))
+        XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: nil), .allFit)
+    }
 }

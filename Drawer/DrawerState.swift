@@ -151,3 +151,105 @@ func isNoOp(current: DrawerState, requested: DrawerState, userInitiated: Bool) -
 func restoredState(from rawValue: String?) -> DrawerState {
     rawValue.flatMap(DrawerState.init(rawValue:)) ?? .open
 }
+
+// MARK: - Notch
+
+/// A status item window on one display, as the window list reports it.
+struct MenuBarWindow: Equatable {
+    let minX: CGFloat
+    let width: CGFloat
+    let isOnScreen: Bool
+}
+
+/// How the notch affects the drawer on one display.
+enum NotchFit: Equatable {
+    /// Nothing of Drawer's is hidden (or there's nothing to say).
+    case allFit
+    /// The handle and some drawer icons are hidden; `visible` drawer icons still fit.
+    case drawerPartlyHidden(visible: Int)
+    /// Even the drawer's right edge (or, when closed, the archive box) is hidden.
+    case outsideDoesNotFit
+}
+
+/// Each display's copy of the menu bar may place an item up to about 2pt differently.
+let notchTolerance: CGFloat = 3
+
+/// Items sit the same distance from the right edge on every display's menu bar copy.
+func offsetFromRightEdge(itemMinX: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - itemMinX
+}
+
+func minX(atOffsetFromRightEdge offset: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - offset
+}
+
+/// Measures the drawer against one notched display's status item windows. The menu bar
+/// hides overflow from the left, so what's visible is always a rightmost run: if the
+/// handle is hidden, every on-screen window left of the wall is a drawer icon.
+///
+/// - Parameters:
+///   - handleMinX: where `[` sits on this display, or nil when the drawer is closed.
+///   - wallMinX: where `]` sits on this display, or the archive box when closed.
+func notchFit(items: [MenuBarWindow], handleMinX: CGFloat?, wallMinX: CGFloat?, tolerance: CGFloat = notchTolerance) -> NotchFit {
+    guard let wallMinX else { return .allFit }
+    let onScreen = items.filter(\.isOnScreen)
+    func isShowing(_ x: CGFloat) -> Bool { onScreen.contains { abs($0.minX - x) <= tolerance } }
+
+    guard isShowing(wallMinX) else { return .outsideDoesNotFit }
+    guard let handleMinX, !isShowing(handleMinX) else { return .allFit }
+    return .drawerPartlyHidden(visible: onScreen.filter { $0.minX < wallMinX - tolerance }.count)
+}
+
+/// The most serious of several displays' results.
+func worst(_ fits: [NotchFit]) -> NotchFit {
+    if fits.contains(.outsideDoesNotFit) { return .outsideDoesNotFit }
+    let partly = fits.compactMap { fit -> Int? in
+        if case let .drawerPartlyHidden(visible) = fit { return visible }
+        return nil
+    }
+    return partly.min().map { .drawerPartlyHidden(visible: $0) } ?? .allFit
+}
+
+/// Dimmed lines for Drawer's menu (and, first line only, the tooltip) explaining what
+/// the notch is hiding. Empty when there's nothing to say. While the drawer is closed,
+/// the partly-hidden hint describes the open drawer (from the last measurement).
+func notchHint(for fit: NotchFit, drawerIsOpen: Bool = true) -> [String] {
+    switch fit {
+    case .allFit:
+        return []
+    case let .drawerPartlyHidden(visible):
+        if drawerIsOpen {
+            let count: String
+            switch visible {
+            case 0: count = String(localized: "No Drawer Icons Fit Beside the Notch")
+            case 1: count = String(localized: "Only the Icon Nearest ] Fits Beside the Notch")
+            default: count = String(localized: "Only the \(visible) Icons Nearest ] Fit Beside the Notch")
+            }
+            return [count, String(localized: "⌘-Drag Your Favorites Next to ]")]
+        }
+        let count: String
+        switch visible {
+        case 0: count = String(localized: "When Open, No Drawer Icons Fit Beside the Notch")
+        case 1: count = String(localized: "When Open, Only the Icon Nearest ] Fits Beside the Notch")
+        default: count = String(localized: "When Open, Only the \(visible) Icons Nearest ] Fit Beside the Notch")
+        }
+        return [count, String(localized: "Open the Drawer and ⌘-Drag Your Favorites Next to ]")]
+    case .outsideDoesNotFit:
+        return [
+            String(localized: "Too Many Icons Outside the Drawer to Fit Beside the Notch"),
+            String(localized: "⌘-Drag Some Icons Into the Drawer"),
+        ]
+    }
+}
+
+/// Which notch result to explain. Only when a notched display is present. The
+/// outside-doesn't-fit warning always wins; otherwise an open drawer uses the current
+/// measurement and a closed one uses the last measurement taken while open (a closed
+/// drawer's icons are off-screen, so they can't be measured). `current` is nil when
+/// Drawer's items haven't been laid out yet; then the last open measurement stands in.
+func notchFitToExplain(hasNotch: Bool, state: DrawerState, current: NotchFit?, lastOpen: NotchFit?) -> NotchFit {
+    guard hasNotch else { return .allFit }
+    if current == .outsideDoesNotFit { return .outsideDoesNotFit }
+    if state == .open, let current { return current }
+    return lastOpen ?? .allFit
+}

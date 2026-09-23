@@ -1,6 +1,6 @@
 # Drawer — Product Requirements Document
 
-**Version:** 0.1.0 (personal build; 1.0.0 is the first public release)
+**Version:** 0.2.0 (personal build; 1.0.0 is the first public release)
 **Author:** Tom McFarlin
 **Status:** Draft
 **Last updated:** 2026-09-23
@@ -24,6 +24,7 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 - Remember whether the drawer was open or closed across launches.
 - Require no special permissions.
 - Look and feel like a native part of macOS.
+- (0.2.0) On a MacBook with a notch, tell people how many drawer icons fit beside it, so they can keep their favorites where they stay visible.
 
 ## Non-goals (0.1.0)
 
@@ -34,10 +35,16 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 - Auto-hide timers.
 - Global keyboard shortcuts.
 - Hiding desktop icons.
-- Handling icons hidden behind the MacBook notch (see [future-features.md](future-features.md)).
+- Handling icons hidden behind the MacBook notch (added in 0.2.0; see **Notch** below).
 - An in-app onboarding flow (setup lives in the README).
 - In-app purchases or a paid tier.
 - Automatic updates (no Sparkle yet).
+
+## Non-goals (0.2.0)
+
+- Showing or opening icons hidden by the notch. That needs Accessibility permission; it's planned as an opt-in drop-down (#29).
+- Opening or closing the drawer automatically. Closing on its own would fight a manual open, and open/closed is shared across displays.
+- Any new permission.
 
 ## Target user
 
@@ -91,6 +98,28 @@ All three are **template images**, drawn at the same weight as the icons around 
 
 Closing the drawer works by stretching the wall so everything to its left is pushed off-screen. macOS offers no way to hide icons from the middle of the menu bar without extra permissions, so **anything left of `[` is hidden when the drawer closes, too**. Most new apps add their icons at the far left of the menu bar, so while the drawer is open their icons can appear just left of `[`. Drag them into the drawer or to the right of `]`.
 
+### Notch (0.2.0)
+
+On a MacBook with a notch, the menu bar only has the space to the right of the notch for icons (790pt on Tom's MacBook at its current resolution). When icons don't fit, macOS hides them from the **left**. With the drawer open, the first to go are `[` and the drawer's leftmost icons. `]` and everything to its right stay visible.
+
+**Why Drawer can't bring them back without permission:** every permission-free trick, including Drawer's own wall, hides a leftmost run of icons, and so does the notch. So what's visible is always the rightmost run. Revealing a hidden drawer icon would mean hiding icons to its right or moving it, and both need Accessibility.
+
+**What Drawer does instead: the ordering hint.** The drawer icons that survive are the ones **nearest `]`**. Drawer measures how many fit and says so, passively:
+
+| Situation | Dimmed lines at the top of Drawer's menu | `]` tooltip |
+|-----------|------------------------------------------|-------------|
+| Some drawer icons hidden (open) | "Only the 4 Icons Nearest ] Fit Beside the Notch" / "⌘-Drag Your Favorites Next to ]" | "Close Drawer" + the first line |
+| One fits | "Only the Icon Nearest ] Fits Beside the Notch" / … | same pattern |
+| None fit | "No Drawer Icons Fit Beside the Notch" / … | same pattern |
+| Icons outside the drawer don't fit (open or closed) | "Too Many Icons Outside the Drawer to Fit Beside the Notch" / "⌘-Drag Some Icons Into the Drawer" | the visible item's tooltip + the first line |
+| Drawer closed, and some drawer icons were hidden the last time it was open | "When Open, Only the 8 Icons Nearest ] Fit Beside the Notch" / "Open the Drawer and ⌘-Drag Your Favorites Next to ]" (same one/none forms) | archive box: "Open Drawer" + the first line |
+| Everything fits, or no notched display | *(nothing)* | unchanged |
+
+- The hint is shown whenever a notched display is present, whether the drawer is open or closed, and never otherwise (decided 2026-09-23). While closed, the drawer's icons are off-screen and can't be measured, so it uses the last measurement from when the drawer was open. That measurement is remembered across launches but forgotten if the notched displays change.
+- The hint never pops up; it's only in the menu and tooltip.
+- A notice about a refused or failed close takes priority in the menu.
+- It's measured without permissions, and refreshed when the drawer changes, when the menu opens, and when displays change.
+
 ### State persistence
 
 Whether the drawer is open or closed is saved and restored on the next launch. macOS restores the positions of `[` and `]`.
@@ -131,6 +160,8 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | F13 | Opening Drawer again while it's running opens the drawer (and does nothing if it's already open). |
 | F14 | A refused or failed close is explained in the menu, not only with a beep. |
 | F15 | Each drawer item has a tooltip naming what a click will do. |
+| F17 | (0.2.0) On a notched display, the menu and `]` tooltip say how many drawer icons fit beside the notch and suggest keeping favorites next to `]`. |
+| F18 | (0.2.0) If the icons outside the drawer don't fit beside the notch, the menu and tooltip warn about it, whether the drawer is open or closed. |
 | F16 | Opening and closing are instant, with a quick bounce on the drawer's own icon (the archive box on close, `]` on open); no bounce when Reduce Motion is on. |
 
 ### Non-functional
@@ -170,7 +201,10 @@ Standard macOS About panel, matching Now Playing on Spotify:
 - **Tooling:** command line only (XcodeGen + `xcodebuild` + `make`).
 - **License:** Copyright Tom McFarlin, all rights reserved (same as Now Playing on Spotify).
 
+- **Notch (0.2.0):** a permission-free ordering hint and an outside-doesn't-fit warning, both passive. No automatic opening or closing. An opt-in Accessibility drop-down for hidden icons comes later (#29). Decided 2026-09-23.
+
 ## Release plan
 
 - **0.1.x:** personal builds for Tom's own use.
+- **0.2.0:** notch awareness (personal build).
 - **1.0.0:** the first release to other people.

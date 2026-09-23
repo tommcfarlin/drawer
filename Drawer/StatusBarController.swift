@@ -17,6 +17,13 @@ final class StatusBarController: NSObject {
     private static let restoreMaxAttempts = 30
     private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
     private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
+    private static let frontVisibilityKey = "NSStatusItem VisibleCC DrawerFront"
+    /// The last notch measurement taken while open, and the displays it was taken on.
+    private static let lastOpenVisibleKey = "notchVisibleWhenOpen"
+    private static let lastOpenDisplaysKey = "notchDisplays"
+    /// How long to wait after a change before measuring the notch.
+    private static let notchRefreshDelay: TimeInterval = 0.4
+    private static let notchRefreshAttempts = 5
     /// How long to wait after closing before confirming the front is on screen.
     private static let frontCheckDelay: TimeInterval = 0.3
 
@@ -85,6 +92,15 @@ final class StatusBarController: NSObject {
         }
 
         restoreSavedState()
+
+        // Plugging in or removing a display changes what fits beside the notch.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { self?.refreshNotchTooltip() }
+            }
+        }
     }
 
     private var parts: [(DrawerPart, NSStatusItem)] {
@@ -190,15 +206,20 @@ final class StatusBarController: NSObject {
     }
 
     /// Built each time it opens so its contents can reflect the current state.
-    /// A notice, if given, appears first as a dimmed, unclickable line.
+    /// A notice, if given, appears first as a dimmed, unclickable line; otherwise the
+    /// notch hint does, when there is one.
     private func makeMenu(notice: String?) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        if let notice {
-            let line = NSMenuItem(title: notice, action: nil, keyEquivalent: "")
-            line.isEnabled = false
-            menu.addItem(line)
+        // A refused or failed close takes priority over the notch hint.
+        let lines = notice.map { [$0] } ?? notchHint(for: notchFitToExplainNow().fit, drawerIsOpen: state == .open)
+        if !lines.isEmpty {
+            for text in lines {
+                let line = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+                line.isEnabled = false
+                menu.addItem(line)
+            }
             menu.addItem(.separator())
         }
 
@@ -242,10 +263,36 @@ final class StatusBarController: NSObject {
             item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
             item.button?.toolTip = state.menuActionTitle
         }
+        // Measure once the menu bar has laid out the change.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { [weak self] in
+            self?.refreshNotchTooltip()
+        }
+    }
+
+    /// Adds the notch hint's first line to the tooltip of the drawer's visible edge:
+    /// `]` while open, the archive box while closed.
+    private func refreshNotchTooltip(attempt: Int = 1) {
+        let edge = state == .open ? wallItem : frontItem
+        let (fit, measured) = notchFitToExplainNow()
+        if let first = notchHint(for: fit, drawerIsOpen: state == .open).first {
+            edge.button?.toolTip = state.menuActionTitle + "\n" + first
+        } else {
+            edge.button?.toolTip = state.menuActionTitle
+        }
+        // Just after a change, the menu bar may not have placed Drawer's items yet.
+        if !measured, attempt < Self.notchRefreshAttempts {
+            DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { [weak self] in
+                self?.refreshNotchTooltip(attempt: attempt + 1)
+            }
+        }
     }
 
     private static func seedFrontPosition() {
         let defaults = UserDefaults.standard
+        // The menu bar remembers the front as hidden when Drawer quits with the drawer
+        // open, and re-creating a remembered-hidden item discards its saved position.
+        // Drawer manages the front's visibility itself, so forget that flag.
+        defaults.removeObject(forKey: frontVisibilityKey)
         guard let seeded = seededFrontPosition(savedWallPosition: defaults.object(forKey: wallPositionKey) as? Double) else { return }
         defaults.set(seeded, forKey: frontPositionKey)
     }
@@ -272,9 +319,10 @@ final class StatusBarController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.frontCheckDelay) { [weak self] in
             guard let self, self.state == .closed else { return }
             let screens = NSScreen.screens.map(\.frame)
-            let placed = (self.frontItem.button?.window?.frame).map { isPlaced($0, on: screens) } ?? false
+            let frame = self.frontItem.button?.window?.frame
+            let placed = frame.map { isPlaced($0, on: screens) } ?? false
             guard placed else {
-                Self.log.error("The closed drawer didn't appear on screen; reopening")
+                Self.log.error("The closed drawer didn't appear on screen (front frame \(frame.map { NSStringFromRect($0) } ?? "none", privacy: .public)); reopening")
                 let explain = self.lastChangeWasUserInitiated
                 self.setState(.open, userInitiated: false)
                 if explain {
@@ -284,6 +332,62 @@ final class StatusBarController: NSObject {
                 return
             }
         }
+    }
+
+    // MARK: - Notch
+
+    /// How the notch affects the drawer right now, worst case across notched displays,
+    /// and whether any display has a notch at all. `fit` is nil when Drawer's own items
+    /// haven't been laid out yet (for example, just after opening), so it can't tell.
+    func currentNotchFit() -> (hasNotch: Bool, fit: NotchFit?) {
+        // Drawer's own frames may come from any display's menu bar copy; carry each one
+        // over to the notched display by its distance from the right edge.
+        func offset(of item: NSStatusItem) -> CGFloat? {
+            guard let window = item.button?.window, let screen = window.screen, item.isVisible else { return nil }
+            return offsetFromRightEdge(itemMinX: window.frame.minX, screenMaxX: screen.frame.maxX)
+        }
+        let handleOffset = state == .open ? offset(of: handleItem) : nil
+        let edgeOffset = state == .open ? offset(of: wallItem) : offset(of: frontItem)
+
+        let displays = MenuBarWindows.notchedDisplays()
+        let measurable = state == .open ? (handleOffset != nil && edgeOffset != nil) : edgeOffset != nil
+        guard measurable else { return (!displays.isEmpty, nil) }
+        let fits = displays.map { display in
+            notchFit(
+                items: display.windows,
+                handleMinX: handleOffset.map { minX(atOffsetFromRightEdge: $0, screenMaxX: display.screenMaxX) },
+                wallMinX: edgeOffset.map { minX(atOffsetFromRightEdge: $0, screenMaxX: display.screenMaxX) }
+            )
+        }
+        let result = worst(fits)
+        Self.log.debug("notch fit: \(String(describing: result), privacy: .public) across \(fits.count, privacy: .public) notched display(s)")
+        return (!displays.isEmpty, result)
+    }
+
+    /// What the menu and tooltip should explain: measures now, remembers the result
+    /// while open (so a closed drawer can still describe the open one), and forgets it
+    /// when there's no notch or the displays have changed.
+    private func notchFitToExplainNow() -> (fit: NotchFit, measured: Bool) {
+        let (hasNotch, current) = currentNotchFit()
+        let defaults = UserDefaults.standard
+        let displays = MenuBarWindows.notchedDisplaySignature()
+
+        if !hasNotch || defaults.string(forKey: Self.lastOpenDisplaysKey) != displays {
+            defaults.removeObject(forKey: Self.lastOpenVisibleKey)
+            defaults.removeObject(forKey: Self.lastOpenDisplaysKey)
+        }
+        if hasNotch, state == .open, let current, current != .outsideDoesNotFit {
+            if case let .drawerPartlyHidden(visible) = current {
+                defaults.set(visible, forKey: Self.lastOpenVisibleKey)
+            } else {
+                defaults.removeObject(forKey: Self.lastOpenVisibleKey)
+            }
+            defaults.set(displays, forKey: Self.lastOpenDisplaysKey)
+        }
+
+        let lastOpen = (defaults.object(forKey: Self.lastOpenVisibleKey) as? Int).map { NotchFit.drawerPartlyHidden(visible: $0) }
+        let fit = notchFitToExplain(hasNotch: hasNotch, state: state, current: current, lastOpen: lastOpen)
+        return (fit, !hasNotch || current != nil)
     }
 
     // MARK: - Bounce
