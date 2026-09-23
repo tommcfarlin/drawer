@@ -76,7 +76,9 @@ All three are **template images**, drawn at the same weight as the icons around 
 | Action | Result |
 |--------|--------|
 | Left-click `[`, `]`, or the archive box | Opens or closes the drawer |
-| Right-click (or Control-click) any of them | Opens a small menu: **About Drawer**, separator, **Quit Drawer** (⌘Q) |
+| Right-click (or Control-click) any of them | Opens a small menu: **Close Drawer** / **Open Drawer**, separator, **How to Use Drawer…**, **About Drawer**, separator, **Quit Drawer** (⌘Q) |
+| Hover any of them | Tooltip: "Close Drawer" or "Open Drawer" |
+| Open Drawer again (Finder, Spotlight, Launchpad) while it's running | Opens the drawer, which is the way back if macOS ever hides the archive box |
 | ⌘-drag any menu bar icon | Standard macOS rearranging. Drop an icon between `[` and `]` to put it in the drawer. Drop it right of `]` to keep it always visible. |
 
 ### First launch
@@ -95,7 +97,7 @@ Whether the drawer is open or closed is saved and restored on the next launch. m
 
 ### Safety rule
 
-If `[` ends up to the **right** of `]` (for example, the user ⌘-dragged it there), the drawer is inside out and closing it wouldn't make sense. In this case Drawer refuses to close, beeps, and stays open.
+If `[` ends up to the **right** of `]` (for example, the user ⌘-dragged it there), the drawer is inside out and closing it wouldn't make sense. In this case Drawer refuses to close, beeps, and opens its menu with a dimmed first line explaining the fix: "Move [ to the Left of ] to Use the Drawer". If the archive box ever fails to appear after closing, Drawer reopens the drawer and explains: "The Menu Bar Is Too Full to Close the Drawer".
 
 ### About panel
 
@@ -120,12 +122,15 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | F4 | Closing hides every status item between the handle and the wall. |
 | F5 | While closed, an archive box appears where the drawer was; icons right of it are unaffected. |
 | F6 | Opening restores the handle and every icon in the drawer. |
-| F7 | Right-clicking (or Control-clicking) any drawer item shows a menu with About Drawer and Quit Drawer. |
+| F7 | Right-clicking (or Control-clicking) any drawer item shows a menu with Close/Open Drawer, How to Use Drawer…, About Drawer, and Quit Drawer. |
 | F8 | Open/closed state persists across launches. |
 | F9 | Handle and wall positions persist across launches. |
 | F10 | App will not close the drawer if the handle is to the right of the wall. |
 | F11 | First launch starts open. |
 | F12 | While open, Drawer adds nothing to the menu bar besides `[` and `]` (no empty space or hover highlight). |
+| F13 | Opening Drawer again while it's running opens the drawer. |
+| F14 | A refused or failed close is explained in the menu, not only with a beep. |
+| F15 | Each drawer item has a tooltip naming what a click will do. |
 
 ### Non-functional
 
@@ -137,7 +142,9 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | N4 | App Sandbox and Hardened Runtime enabled. |
 | N5 | 0.1.x: built and run locally with an Apple Development certificate. 1.0.0+: distributed as a notarized, Developer ID–signed DMG. |
 | N6 | Idle CPU usage effectively zero; no polling or timers (a bounded check at launch is allowed). |
-| N7 | VoiceOver labels on both menu bar items ("Close drawer" / "Open drawer"). |
+| N7 | VoiceOver: each item has its own label ("Drawer, left edge", "Drawer, right edge", "Closed drawer") and help ("Click to close/open the drawer."); any press that isn't a right-click toggles; a "Show Menu" action reaches the menu. |
+| N9 | Bracket images are pixel-aligned at every display scale (1px strokes at 1x, 1.5pt at Retina). |
+| N10 | All user-facing text lives in a String Catalog (English only for now). |
 | N8 | Collects no data; no network access. |
 
 ## Pricing and distribution
