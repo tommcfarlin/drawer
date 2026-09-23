@@ -31,22 +31,36 @@ Now Playing on Spotify uses SwiftUI's `MenuBarExtra`. Drawer can't, because it n
 
 macOS lays status items out right-to-left and drops items that don't fit. Drawer uses three status items, left to right:
 
-| Item | Autosave name | Open | Closed |
-|------|---------------|------|--------|
-| Handle | `DrawerHandle` | `[` | Pushed off-screen |
-| Wall | `DrawerWall` | `\|` | Stretched to `10_000`pt, off-screen |
-| Front | `DrawerFront` | Length `0`, button hidden | `[\|` |
+| Item | Autosave name | Image | Open | Closed |
+|------|---------------|-------|------|--------|
+| Handle | `DrawerHandle` | `[` (custom template) | Visible | Pushed off-screen |
+| Wall | `DrawerWall` | `]` (custom template) | Visible | Stretched to `10_000`pt, off-screen |
+| Front | `DrawerFront` | SF Symbols `archivebox` | `isVisible = false` | Visible, just right of where the wall was |
 
 1. Everything between the handle and the wall is **in the drawer**.
-2. **Closing** sets the wall's `length` to `10_000`. macOS pushes it, the handle, and every item to its left past the left edge of the screen, and doesn't draw them.
-3. The **front**, which sits just right of the wall, becomes visible and shows `[|`, so the shut drawer appears in place.
-4. Items right of the front (system items, and anything the user dragged right of `|`) are unaffected.
+2. **Closing:** show the front just right of the wall (see below), then set the wall's `length` to `10_000`. macOS pushes the wall, the handle, and every item to their left past the left edge of the screen, and doesn't draw them. The front stays where the drawer was.
+3. **Opening:** set the wall's length back to `variableLength` and hide the front.
+4. Items right of the front (system items, and anything the user dragged right of `]`) are unaffected.
 
-Findings that shaped this design (macOS 26):
+### Placing the front
 
-- An item stretched that wide is moved entirely off-screen (it's clamped to about 5,016pt and placed at a negative x), so **the stretched item can never be the one that shows `[|`**. That's why the front is a separate item.
-- Every status item keeps a minimum width of about 16pt, even at length `0` with a hidden button. So while open, there's a small gap just right of `|`.
-- Setting `isVisible = false` on the front while open doesn't work: when it's shown again, macOS inserts it at the far left, which is off-screen while closed.
+A status item that's shown again with `isVisible = true` lands wherever its saved "preferred position" says. macOS doesn't save one for an item that has never been dragged, so without one the front reappears at the far left, which is off-screen while the drawer is closed. Before showing the front, Drawer writes its position itself:
+
+- Key: `NSStatusItem Preferred Position DrawerFront` in Drawer's `UserDefaults`.
+- Value: `frontPreferredPosition(wallMinX:screenMaxX:)` = the screen's right edge − the wall's left edge − 1. Positions are measured from the screen's right edge to the item's **left** edge, and a larger value means further left, so this puts the front just right of the wall.
+- **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself and logs an error.
+
+This key is undocumented AppKit behavior. The safety net keeps a future macOS change from stranding the user.
+
+### Findings that shaped this design (macOS 26)
+
+- An item stretched to `10_000` is moved entirely off-screen (it's clamped to about 5,016pt and placed at a negative x), so **the stretched item can never be the one showing the closed drawer**. That's why the front is a separate item.
+- Every visible status item takes at least about 16pt, even at length `0` with its button hidden, and macOS 26 draws its hover highlight over that empty space. That's why the front is removed (`isVisible = false`) while open, instead of being left in the menu bar at zero width.
+- For roughly the first 100–250 ms after launch, frames are placeholders (see **Restoring at launch**).
+
+### Why images, not text
+
+Apple's Human Interface Guidelines say menu bar extras should be template images (ideally SF Symbols), not text. Text characters don't share the size, stroke weight, or vertical centering of the icons around them. The brackets are drawn in code at 7×16pt with a 1.5pt stroke and rounded caps, matching SF Symbols' regular weight at menu bar size. The archive box is `archivebox` at 14pt regular. All three are `isTemplate = true`.
 
 This technique uses only public API and needs no permissions. It's the same basic approach used by Vanilla and Hidden Bar.
 
@@ -63,7 +77,7 @@ This technique uses only public API and needs no permissions. It's the same basi
 | `Drawer/DrawerApp.swift` | `@main` SwiftUI `App`; `NSApplicationDelegateAdaptor`; an empty `Settings` scene |
 | `Drawer/AppDelegate.swift` | Creates `StatusBarController` on launch |
 | `Drawer/StatusBarController.swift` | Owns the three status items, handles clicks, applies state, restores state at launch, right-click menu, About panel |
-| `Drawer/DrawerState.swift` | Pure, testable logic (state, titles, lengths, close guard, placement check) |
+| `Drawer/DrawerState.swift` | Pure, testable logic (state, symbol name, wall length, front position, close guard, placement check) |
 | `Drawer/Info.plist` | `LSUIElement = YES`; version from build settings; copyright |
 | `Drawer/Assets.xcassets/AppIcon.appiconset` | App icon rendered from the 🗄️ emoji at every required size (16–1024 px) |
 | `Drawer/Drawer.entitlements` | `com.apple.security.app-sandbox = YES` (nothing else) |
@@ -75,11 +89,11 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 
 | Symbol | Behavior |
 |--------|----------|
-| `enum DrawerState: String { case open, closed }` | `toggled`; `wallTitle` (`\|` / empty); `frontTitle` (empty / `[\|`); `accessibilityLabel` ("Close drawer" / "Open drawer") |
-| `handleTitle` | `[` |
+| `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `accessibilityLabel` ("Close drawer" / "Open drawer") |
+| `closedSymbolName` | `archivebox` |
 | `wallClosedLength` | `10_000` |
 | `wallLength(for:)` | Closed: `10_000`. Open: `variableLength`. |
-| `frontLength(for:)` | Closed: `variableLength`. Open: `0`. |
+| `frontPreferredPosition(wallMinX:screenMaxX:)` | `screenMaxX - wallMinX - 1` |
 | `canClose(handleMinX:wallMinX:)` | `true` only if both are known and the handle is strictly left of the wall |
 | `isPlaced(_:on:)` | `true` if the frame has size and sits entirely inside one of the screens |
 | `restoredState(from:)` | Saved raw value, or `.open` if it's missing or unrecognized |
@@ -89,9 +103,8 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 ### Creation
 
 - New status items are inserted to the **left** of existing ones, so create them right to left: **front**, then **wall**, then **handle**.
-- Set each item's `autosaveName` so macOS remembers where the user drags them, and set `isVisible = true`.
-- On first launch the three items appear at the left end of the status area. The user drags icons in between `[` and `|`.
-- Each title uses `NSFont.menuBarFont(ofSize: 0)`.
+- Set each item's `autosaveName` so macOS remembers where the user drags them, and set `isVisible = true`. The front starts visible so the menu bar lays it out; it's hidden once launch settles if the drawer is open.
+- On first launch the items appear at the left end of the status area. The user drags icons in between `[` and `]`.
 
 ### Clicks
 
@@ -105,16 +118,19 @@ All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMou
 `setState(_:beepIfRefused:)`:
 
 1. When closing, check `canClose` against the handle's and wall's `button.window.frame.minX`. If it fails, log it, beep (unless told not to), and stay open.
-2. Apply the state: the wall's length and title, the front's length, title and `button.isHidden`, and the accessibility label on all three.
+2. Apply the state:
+   - Closing: write the front's preferred position, show the front, schedule the safety-net check, then stretch the wall.
+   - Opening: shrink the wall, then hide the front.
+   - Update the accessibility label on all three.
 3. Save `state.rawValue` to `UserDefaults` under `drawerState`.
 
 ### Restoring at launch
 
-For about the first 100–250 ms after launch, the menu bar reports placeholder frames: zero sizes, off-screen positions, and values that jump around. The close guard needs real positions, so:
+For about the first 100–250 ms after launch, the menu bar reports placeholder frames: zero sizes, off-screen positions, and values that jump around. So:
 
-- If the saved state is `open`, apply it immediately.
-- If it's `closed`, check every 100 ms (for up to 3 seconds, at launch only). Restore once the handle and the wall are both `isPlaced` and haven't moved between two checks. If they never settle, stay open and log it.
-- A refused restore is silent (no beep).
+- Check every 100 ms (for up to 3 seconds, at launch only) until all three items are `isPlaced` and haven't moved between two checks. Then apply the saved state.
+- If the saved state is `closed` but closing is refused, apply `open` silently (no beep).
+- If they never settle, open the drawer and log it.
 
 ### Right-click menu
 
@@ -148,15 +164,16 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 | Key | Store | Type | Default | Purpose |
 |-----|-------|------|---------|---------|
 | `drawerState` | `UserDefaults` | String (`open` / `closed`) | `open` | Last drawer state |
-| `NSStatusItem Preferred Position DrawerHandle` / `DrawerWall` / `DrawerFront` | `UserDefaults` (managed by AppKit) | Number | — | Item positions |
+| `NSStatusItem Preferred Position DrawerHandle` / `DrawerWall` | `UserDefaults` (managed by AppKit) | Number | — | Positions the user dragged the brackets to |
+| `NSStatusItem Preferred Position DrawerFront` | `UserDefaults` (written by Drawer before showing the front) | Number | — | Puts the closed drawer just right of the wall |
 
 ## Edge cases
 
 | Case | Behavior |
 |------|----------|
 | Handle dragged right of the wall | Closing is refused (beep); the drawer stays open |
+| Front doesn't land on screen after closing | Drawer reopens itself and logs an error |
 | Icons left of the handle | Also hidden while closed (known limitation) |
-| An icon dropped in the gap just right of `\|` | Lands between the wall and the front: outside the drawer, so it stays visible, shown left of `[\|` while closed |
 | Handle or wall removed from the menu bar (⌘-drag out) | Relaunching restores it, because `isVisible` is set to `true` at launch |
 | Display added/removed, resolution change | No action needed |
 | Sleep/wake, fast user switching | No action needed |
@@ -186,29 +203,32 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (30):
+Unit tests (28):
 
 - `toggled` flips both ways.
-- Titles: the handle is `[`; the wall is `|` when open and empty when closed; the front is empty when open and `[|` when closed.
+- `showsFront` is false when open and true when closed; `closedSymbolName` is `archivebox`.
 - `accessibilityLabel` is "Close drawer" when open and "Open drawer" when closed.
-- `wallLength(for:)` is `10_000` when closed and `variableLength` when open; `frontLength(for:)` is `variableLength` when closed and `0` when open.
+- `wallLength(for:)` is `10_000` when closed and `variableLength` when open.
+- `frontPreferredPosition` is the screen's right edge − the wall's left edge − 1, on the main screen and on a secondary screen.
 - `canClose`: handle left of wall → true; handle right of wall → false; equal → false; either nil → false.
 - `restoredState`: nil, garbage, or a value from the old design (`collapsed`) → `.open`; valid raw values round-trip.
 - `isPlaced`: inside the main or a secondary screen → true; zero height, below every screen, past the right edge, or no screens → false.
 
 Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
 
-- Open: the handle and wall windows are on-screen next to each other, with the front as a 16pt gap to their right.
-- Closed (`defaults write co.pressware.drawer drawerState closed`, then launch): the handle and wall windows are off-screen, and the front is on-screen where the wall was.
+- Open: `[` and `]` are on-screen next to each other, and the next icon starts immediately after `]` (no gap).
+- Closed: `[` and `]` are off-screen, and the archive box is on-screen immediately left of the first always-visible icon.
+- Repeated open/close cycles and relaunches in each saved state produce identical layouts.
 
 Manual QA checklist:
 
-- A fresh install launches open, with `[` and `|` next to each other.
-- ⌘-drag icons in between `[` and `|`, click, and confirm they're hidden and `[|` shows. Click `[|` and confirm they're back.
+- A fresh install launches open, with `[` and `]` next to each other.
+- ⌘-drag icons in between `[` and `]`, click, and confirm they're hidden and the archive box shows. Click the archive box and confirm they're back.
+- No hover highlight or empty space appears next to `]` while open.
 - Quit and relaunch in each state; the state is restored.
-- Drag `[` to the right of `|`; closing is refused with a beep.
+- Drag `[` to the right of `]`; closing is refused with a beep.
 - Right-click or Control-click any of the three items to get About/Quit; About shows 🗄️, the tagline, and working links.
-- Light and dark menu bar, and a tinted/transparent menu bar: `[`, `|`, and `[|` stay legible.
+- Light and dark menu bar, and a tinted/transparent menu bar: `[`, `]`, and the archive box stay legible and match neighboring icons.
 - Intel and Apple silicon builds run.
 
 ## Build and release

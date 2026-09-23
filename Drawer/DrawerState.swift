@@ -7,19 +7,15 @@ enum DrawerState: String {
 
     var toggled: DrawerState { self == .open ? .closed : .open }
 
-    /// The wall is the drawer's right edge. It's only visible while open; closing
-    /// stretches it off-screen.
-    var wallTitle: String { self == .open ? "|" : "" }
-
-    /// The front is the shut drawer, shown just right of the wall only while closed.
-    var frontTitle: String { self == .open ? "" : "[|" }
+    /// The front (the shut drawer) only exists while closed.
+    var showsFront: Bool { self == .closed }
 
     /// What clicking the drawer will do next.
     var accessibilityLabel: String { self == .open ? "Close drawer" : "Open drawer" }
 }
 
-/// The drawer's left edge.
-let handleTitle = "["
+/// SF Symbol shown by the front while the drawer is closed.
+let closedSymbolName = "archivebox"
 
 /// Wide enough to push the wall, the handle, and everything between them off any display.
 /// macOS moves an item this wide entirely off-screen, which is why the shut drawer
@@ -30,9 +26,11 @@ func wallLength(for state: DrawerState) -> CGFloat {
     state == .closed ? wallClosedLength : NSStatusItem.variableLength
 }
 
-/// The front takes no space while open, so it can't be seen or dragged.
-func frontLength(for state: DrawerState) -> CGFloat {
-    state == .closed ? NSStatusItem.variableLength : 0
+/// The menu bar orders items by a saved "preferred position": the distance from
+/// the screen's right edge to the item's left edge, larger meaning further left.
+/// Just under the wall's value puts the front immediately right of the wall.
+func frontPreferredPosition(wallMinX: CGFloat, screenMaxX: CGFloat) -> CGFloat {
+    screenMaxX - wallMinX - 1
 }
 
 /// Closing only makes sense when the handle is left of the wall.

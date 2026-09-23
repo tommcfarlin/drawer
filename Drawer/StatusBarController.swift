@@ -1,19 +1,22 @@
 import AppKit
 import os
 
-/// Owns Drawer's three menu bar items, left to right: the `[` handle, the `|` wall,
+/// Owns Drawer's three menu bar items, left to right: the `[` handle, the `]` wall,
 /// and the front.
 ///
 /// Everything between the handle and the wall is in the drawer. Closing stretches
 /// the wall so wide that it, the handle, and everything left of it are pushed
-/// off-screen. The front, which takes no space while open, then shows `[|` in their
-/// place.
+/// off-screen. The front, which only exists while closed, then shows an archive box
+/// in their place.
 @MainActor
 final class StatusBarController: NSObject {
     private static let stateKey = "drawerState"
     private static let log = Logger(subsystem: "co.pressware.drawer", category: "state")
     private static let restoreInterval: TimeInterval = 0.1
     private static let restoreMaxAttempts = 30
+    private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
+    /// How long to wait after closing before confirming the front is on screen.
+    private static let frontCheckDelay: TimeInterval = 0.3
 
     private let handleItem: NSStatusItem
     private let wallItem: NSStatusItem
@@ -24,8 +27,11 @@ final class StatusBarController: NSObject {
     override init() {
         // New status items are inserted to the left of existing ones, so create them
         // right to left: front, wall, handle.
-        frontItem = NSStatusBar.system.statusItem(withLength: 0)
+        frontItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         frontItem.autosaveName = "DrawerFront"
+        // Start visible so the menu bar records the front's spot just right of the
+        // wall; it's hidden once launch settles if the drawer is open. Hiding it
+        // before it has a spot would bring it back at the far left, off-screen.
         frontItem.isVisible = true
 
         wallItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
@@ -52,43 +58,42 @@ final class StatusBarController: NSObject {
         let quit = NSMenuItem(title: "Quit Drawer", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
         menu.addItem(quit)
 
-        handleItem.button?.attributedTitle = Self.title(handleTitle)
+        handleItem.button?.image = Self.bracket(opening: true)
+        wallItem.button?.image = Self.bracket(opening: false)
+        frontItem.button?.image = Self.closedImage
 
-        apply(state)
         restoreSavedState()
     }
 
     /// The menu bar positions its items shortly after launch, reporting placeholder
-    /// frames along the way. Wait until both items sit on a screen and have stopped
-    /// moving before restoring, so the close guard sees real positions.
+    /// frames along the way. Wait until all three items sit on a screen and have
+    /// stopped moving before restoring, so the close guard sees real positions and
+    /// the front has a recorded spot before it's hidden.
     private func restoreSavedState() {
         let saved = restoredState(from: UserDefaults.standard.string(forKey: Self.stateKey))
-        guard saved == .closed else {
-            setState(saved)
-            return
-        }
-
-        var previous: (CGRect, CGRect)?
+        let items = [handleItem, wallItem, frontItem]
+        var previous: [CGRect]?
         var attempts = 0
 
         func check() {
             attempts += 1
             let screens = NSScreen.screens.map(\.frame)
-            let handle = handleItem.button?.window?.frame
-            let wall = wallItem.button?.window?.frame
+            let frames = items.compactMap { $0.button?.window?.frame }
 
-            if let handle, let wall,
-               isPlaced(handle, on: screens), isPlaced(wall, on: screens),
-               let (lastHandle, lastWall) = previous,
-               lastHandle == handle, lastWall == wall {
+            if frames.count == items.count,
+               frames.allSatisfy({ isPlaced($0, on: screens) }),
+               frames == previous {
                 setState(saved, beepIfRefused: false)
+                if state != saved { apply(state) }
                 return
             }
             guard attempts < Self.restoreMaxAttempts else {
-                Self.log.notice("Menu bar items never settled; staying open")
+                Self.log.notice("Menu bar items never settled; opening the drawer")
+                state = .open
+                apply(state)
                 return
             }
-            if let handle, let wall { previous = (handle, wall) }
+            previous = frames
             DispatchQueue.main.asyncAfter(deadline: .now() + Self.restoreInterval) { check() }
         }
 
@@ -129,21 +134,70 @@ final class StatusBarController: NSObject {
     }
 
     private func apply(_ state: DrawerState) {
+        if state.showsFront && !frontItem.isVisible {
+            // A re-shown item lands wherever its saved position says, and the menu bar
+            // doesn't save one on its own. Point it just right of the wall, and show it
+            // before the wall stretches so it isn't pushed off-screen with it.
+            if let wall = wallItem.button?.window, let screen = wall.screen {
+                UserDefaults.standard.set(
+                    frontPreferredPosition(wallMinX: wall.frame.minX, screenMaxX: screen.frame.maxX),
+                    forKey: Self.frontPositionKey
+                )
+            }
+            frontItem.isVisible = true
+            confirmFrontIsShowing()
+        }
         wallItem.length = wallLength(for: state)
-        wallItem.button?.attributedTitle = Self.title(state.wallTitle)
-
-        frontItem.length = frontLength(for: state)
-        frontItem.button?.attributedTitle = Self.title(state.frontTitle)
-        frontItem.button?.isHidden = state == .open
+        if !state.showsFront { frontItem.isVisible = false }
 
         for item in [handleItem, wallItem, frontItem] {
             item.button?.setAccessibilityLabel(state.accessibilityLabel)
         }
     }
 
-    /// A title in the menu bar's own font.
-    private static func title(_ string: String) -> NSAttributedString {
-        NSAttributedString(string: string, attributes: [.font: NSFont.menuBarFont(ofSize: 0)])
+    /// Safety net: if the front didn't land on screen, there'd be nothing to click to
+    /// reopen the drawer, so reopen it.
+    private func confirmFrontIsShowing() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.frontCheckDelay) { [weak self] in
+            guard let self, self.state == .closed else { return }
+            let screens = NSScreen.screens.map(\.frame)
+            guard let frame = self.frontItem.button?.window?.frame, isPlaced(frame, on: screens) else {
+                Self.log.error("The closed drawer didn't appear on screen; reopening")
+                self.setState(.open)
+                return
+            }
+        }
+    }
+
+    // MARK: - Images
+
+    /// `[` or `]`, drawn to match SF Symbols' regular weight at menu bar size.
+    private static func bracket(opening: Bool) -> NSImage {
+        let image = NSImage(size: NSSize(width: 7, height: 16), flipped: false) { _ in
+            let path = NSBezierPath()
+            path.lineWidth = 1.5
+            path.lineCapStyle = .round
+            path.lineJoinStyle = .round
+            let tips: CGFloat = opening ? 5.5 : 1.5
+            let spine: CGFloat = opening ? 1.5 : 5.5
+            path.move(to: NSPoint(x: tips, y: 1.5))
+            path.line(to: NSPoint(x: spine, y: 1.5))
+            path.line(to: NSPoint(x: spine, y: 14.5))
+            path.line(to: NSPoint(x: tips, y: 14.5))
+            NSColor.black.setStroke()
+            path.stroke()
+            return true
+        }
+        image.isTemplate = true
+        return image
+    }
+
+    private static var closedImage: NSImage? {
+        let config = NSImage.SymbolConfiguration(pointSize: 14, weight: .regular)
+        let image = NSImage(systemSymbolName: closedSymbolName, accessibilityDescription: "Drawer")?
+            .withSymbolConfiguration(config)
+        image?.isTemplate = true
+        return image
     }
 
     @objc private func showAbout() {

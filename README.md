@@ -8,34 +8,33 @@ A tiny macOS menu bar app that hides your menu bar icons with one click and brin
 
 ## How it works
 
-Drawer adds a drawer to your menu bar: a `[` on the left and a `|` on the right. Anything you put between them is **in the drawer**.
+Drawer adds a pair of brackets to your menu bar: `[` on the left, `]` on the right. Anything you put between them is **in the drawer**.
 
 ```
-Open:    [ Dropbox 1Password Slack |  Wi-Fi Battery Control-Center Clock
-Closed:                          [|  Wi-Fi Battery Control-Center Clock
+Open:    [ Dropbox 1Password Slack ]  Wi-Fi Battery Control-Center Clock
+Closed:                     (archive box)  Wi-Fi Battery Control-Center Clock
 ```
 
-Click the drawer to close it, and everything inside disappears, leaving a tidy `[|`. Click `[|` to open it again.
+Click the drawer to close it, and everything inside disappears, leaving a small archive box. Click the box to open it again.
 
 ## Setup
 
-1. Open Drawer. A `[` and a `|` appear side by side in your menu bar.
-2. Hold **⌘ (Command)** and drag each icon you want to hide into the drawer, between `[` and `|`.
-3. Click `[` or `|` to close the drawer.
+1. Open Drawer. A `[` and a `]` appear side by side in your menu bar.
+2. Hold **⌘ (Command)** and drag each icon you want to hide into the drawer, between `[` and `]`.
+3. Click `[` or `]` to close the drawer.
 
 Drawer remembers whether the drawer was open or closed the next time you launch it.
 
-To keep an icon visible all the time, ⌘-drag it to the right of the `|`.
+To keep an icon visible all the time, ⌘-drag it to the right of the `]`.
 
 ### Good to know
 
-- **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `|`).
-- **Keep `[` to the left of `|`.** If they get swapped, Drawer beeps and won't close.
-- While the drawer is open, there's a small gap just right of the `|`. That's the drawer front waiting to show `[|` when it closes.
+- **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
+- **Keep `[` to the left of `]`.** If they get swapped, Drawer beeps and won't close.
 
 ## Menu
 
-Right-click (or Control-click) the drawer for **About Drawer** and **Quit Drawer**.
+Right-click (or Control-click) `[`, `]`, or the archive box for **About Drawer** and **Quit Drawer**.
 
 ## Requirements
 

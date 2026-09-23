@@ -7,7 +7,7 @@
 
 ## Summary
 
-Drawer is a tiny macOS menu bar utility that works like a real drawer. Put menu bar icons inside it, close it with one click, and they're gone. Open it again and they're back. It is deliberately simple: a drawer handle, a drawer wall, no preferences.
+Drawer is a tiny macOS menu bar utility that works like a real drawer. Put menu bar icons inside it, close it with one click, and they're gone. Open it again and they're back. It is deliberately simple: two brackets, one archive box, no preferences.
 
 **Tagline:** Throw your menu bar icons into a drawer. Pull them out when you need them.
 
@@ -19,7 +19,7 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 
 ## Goals
 
-- Hide every icon inside the drawer (between `[` and `|`) with one click.
+- Hide every icon inside the drawer (between `[` and `]`) with one click.
 - Show them again with one click.
 - Remember whether the drawer was open or closed across launches.
 - Require no special permissions.
@@ -47,54 +47,55 @@ Mac users who like a clean, orderly menu bar and want a "set it once, forget it"
 
 ### The drawer
 
-Drawer adds two items to the menu bar. Together they look like a drawer:
+Drawer adds a pair of brackets to the menu bar. Everything between them is **in the drawer**:
 
 | Item | Open | Closed | Purpose |
 |------|------|--------|---------|
-| Handle | `[` | (hidden) | The drawer's left edge. Click it to close the drawer. |
-| Wall | `\|` | `[\|` | The drawer's right edge. When closed, it shows the whole shut drawer. Click it to open or close. |
-
-Everything between `[` and `|` is **in the drawer**.
+| Handle | `[` | (hidden) | The drawer's left edge |
+| Wall | `]` | (hidden) | The drawer's right edge |
+| Front | (not in the menu bar) | Archive box (SF Symbols `archivebox`) | The shut drawer; it echoes the 🗄️ app icon |
 
 ```
-Open:    [ Dropbox 1Password Slack |  Wi-Fi Battery Control-Center Clock
-Closed:                          [|  Wi-Fi Battery Control-Center Clock
+Open:    [ Dropbox 1Password Slack ]  Wi-Fi Battery Control-Center Clock
+Closed:                     (archive box)  Wi-Fi Battery Control-Center Clock
 ```
 
-Icons to the right of the `|` are never hidden.
+Icons to the right of `]` are never hidden.
+
+All three are **template images**, drawn at the same weight as the icons around them, so macOS tints them for light, dark, and tinted menu bars (per Apple's Human Interface Guidelines for menu bar extras). Earlier builds used the text characters `[`, `|`, and `[|`, which didn't match the size, weight, or baseline of neighboring icons.
 
 ### States
 
-| State | Handle | Wall | Icons in the drawer |
-|-------|--------|------|---------------------|
-| Open | `[` | `\|` | Visible |
-| Closed | Pushed off-screen | `[\|`, stretched wide, drawn at its right end | Hidden |
+| State | Handle and wall | Front | Icons in the drawer |
+|-------|-----------------|-------|---------------------|
+| Open | `[` … `]` | Not in the menu bar | Visible |
+| Closed | Pushed off-screen | Archive box | Hidden |
 
 ### Interactions
 
 | Action | Result |
 |--------|--------|
-| Left-click `[`, `\|`, or `[\|` | Opens or closes the drawer |
+| Left-click `[`, `]`, or the archive box | Opens or closes the drawer |
 | Right-click (or Control-click) any of them | Opens a small menu: **About Drawer**, separator, **Quit Drawer** (⌘Q) |
-| ⌘-drag any menu bar icon | Standard macOS rearranging. Drop an icon between `[` and `\|` to put it in the drawer. Drop it right of `\|` to keep it always visible. |
+| ⌘-drag any menu bar icon | Standard macOS rearranging. Drop an icon between `[` and `]` to put it in the drawer. Drop it right of `]` to keep it always visible. |
 
 ### First launch
 
-1. Drawer launches **open**, with `[` and `|` next to each other at the left end of the status icons.
-2. The user ⌘-drags the icons they want hidden in between `[` and `|` (documented in the README).
-3. The user clicks `|` to close the drawer.
+1. Drawer launches **open**, with `[` and `]` next to each other at the left end of the status icons.
+2. The user ⌘-drags the icons they want hidden in between `[` and `]` (documented in the README).
+3. The user clicks `[` or `]` to close the drawer.
 
 ### Known limitation: left of the handle
 
-Closing the drawer works by stretching the wall so everything to its left is pushed off-screen. macOS offers no way to hide icons from the middle of the menu bar without extra permissions, so **anything left of `[` is hidden when the drawer closes, too**. Most new apps add their icons at the far left of the menu bar, so while the drawer is open their icons can appear just left of `[`. Drag them into the drawer or to the right of `|`.
+Closing the drawer works by stretching the wall so everything to its left is pushed off-screen. macOS offers no way to hide icons from the middle of the menu bar without extra permissions, so **anything left of `[` is hidden when the drawer closes, too**. Most new apps add their icons at the far left of the menu bar, so while the drawer is open their icons can appear just left of `[`. Drag them into the drawer or to the right of `]`.
 
 ### State persistence
 
-Whether the drawer is open or closed is saved and restored on the next launch. macOS restores the positions of `[` and `|`.
+Whether the drawer is open or closed is saved and restored on the next launch. macOS restores the positions of `[` and `]`.
 
 ### Safety rule
 
-If `[` ends up to the **right** of `|` (for example, the user ⌘-dragged it there), the drawer is inside out and closing it wouldn't make sense. In this case Drawer refuses to close, beeps, and stays open.
+If `[` ends up to the **right** of `]` (for example, the user ⌘-dragged it there), the drawer is inside out and closing it wouldn't make sense. In this case Drawer refuses to close, beeps, and stays open.
 
 ### About panel
 
@@ -114,16 +115,17 @@ Standard macOS About panel, matching Now Playing on Spotify:
 | ID | Requirement |
 |----|-------------|
 | F1 | App runs as a menu bar agent with no Dock icon. |
-| F2 | App shows a handle item (`[`) and, to its right, a wall item (`\|`). |
+| F2 | App shows a handle (`[`) and, to its right, a wall (`]`), both as template images. |
 | F3 | Left-clicking the handle or the wall opens or closes the drawer. |
 | F4 | Closing hides every status item between the handle and the wall. |
-| F5 | While closed, the wall shows `[\|` and stays in place; icons right of it are unaffected. |
+| F5 | While closed, an archive box appears where the drawer was; icons right of it are unaffected. |
 | F6 | Opening restores the handle and every icon in the drawer. |
-| F7 | Right-clicking (or Control-clicking) either item shows a menu with About Drawer and Quit Drawer. |
+| F7 | Right-clicking (or Control-clicking) any drawer item shows a menu with About Drawer and Quit Drawer. |
 | F8 | Open/closed state persists across launches. |
 | F9 | Handle and wall positions persist across launches. |
 | F10 | App will not close the drawer if the handle is to the right of the wall. |
 | F11 | First launch starts open. |
+| F12 | While open, Drawer adds nothing to the menu bar besides `[` and `]` (no empty space or hover highlight). |
 
 ### Non-functional
 
@@ -152,7 +154,7 @@ Standard macOS About panel, matching Now Playing on Spotify:
 
 ## Resolved decisions
 
-- **Drawer design:** the drawer is the space between a `[` handle and a `|` wall; closed, it shows as `[|` (decided 2026-09-23, replacing the original chevron-and-divider design).
+- **Drawer design:** the drawer is the space between a `[` handle and a `]` wall; closed, it shows an archive box (SF Symbols `archivebox`, echoing the 🗄️ icon). All drawn as template images per Apple's HIG. Decided 2026-09-23, replacing the original chevron-and-divider design and a text-based `[ … |` / `[|` version.
 - **App icon:** the 🗄️ emoji is used for the About panel **and** as the Finder/DMG app icon (AppIcon set generated from the emoji).
 - **Updates:** no Sparkle or automatic updates yet.
 - **Download host:** DMGs are published on GitHub Releases, starting at 1.0.0.

@@ -12,26 +12,18 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(DrawerState.closed.toggled, .open)
     }
 
-    // MARK: - titles
+    // MARK: - front
 
-    func testHandleTitle() {
-        XCTAssertEqual(handleTitle, "[")
+    func testFrontHiddenWhileOpen() {
+        XCTAssertFalse(DrawerState.open.showsFront)
     }
 
-    func testOpenWallTitle() {
-        XCTAssertEqual(DrawerState.open.wallTitle, "|")
+    func testFrontShownWhileClosed() {
+        XCTAssertTrue(DrawerState.closed.showsFront)
     }
 
-    func testClosedWallTitleIsEmpty() {
-        XCTAssertEqual(DrawerState.closed.wallTitle, "")
-    }
-
-    func testOpenFrontTitleIsEmpty() {
-        XCTAssertEqual(DrawerState.open.frontTitle, "")
-    }
-
-    func testClosedFrontTitleShowsShutDrawer() {
-        XCTAssertEqual(DrawerState.closed.frontTitle, "[|")
+    func testClosedSymbolIsArchiveBox() {
+        XCTAssertEqual(closedSymbolName, "archivebox")
     }
 
     // MARK: - accessibilityLabel
@@ -54,14 +46,15 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(wallLength(for: .open), NSStatusItem.variableLength)
     }
 
-    // MARK: - frontLength
+    // MARK: - frontPreferredPosition
 
-    func testOpenFrontLengthIsZero() {
-        XCTAssertEqual(frontLength(for: .open), 0)
+    func testFrontPositionIsJustRightOfWall() {
+        // Wall's left edge 1449pt into a 2560pt screen: 1111pt from the right edge.
+        XCTAssertEqual(frontPreferredPosition(wallMinX: 1449, screenMaxX: 2560), 1110)
     }
 
-    func testClosedFrontLengthIsVariable() {
-        XCTAssertEqual(frontLength(for: .closed), NSStatusItem.variableLength)
+    func testFrontPositionOnSecondaryScreen() {
+        XCTAssertEqual(frontPreferredPosition(wallMinX: -200, screenMaxX: 0), 199)
     }
 
     // MARK: - canClose
