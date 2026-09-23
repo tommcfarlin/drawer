@@ -70,6 +70,14 @@
       "comment": "Tagline in the About panel",
       "extractionState": "manual"
     },
+    "Too Many Icons Outside the Drawer to Fit Beside the Notch": {
+      "comment": "Notch warning: the icons right of ] don't fit beside the MacBook notch",
+      "extractionState": "manual"
+    },
+    "⌘-Drag Some Icons Into the Drawer": {
+      "comment": "Notch warning: suggestion to move icons into the drawer",
+      "extractionState": "manual"
+    },
     "⌘-Drag Your Favorites Next to ]": {
       "comment": "Notch hint: suggestion to move favorite icons next to ]",
       "extractionState": "manual"
