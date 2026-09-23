@@ -11,7 +11,9 @@ enum DrawerState: String {
     var showsFront: Bool { self == .closed }
 
     /// The menu command for what clicking the drawer will do next.
-    var menuActionTitle: String { self == .open ? "Close Drawer" : "Open Drawer" }
+    var menuActionTitle: String {
+        self == .open ? String(localized: "Close Drawer") : String(localized: "Open Drawer")
+    }
 }
 
 /// Drawer's three menu bar items.
@@ -24,15 +26,17 @@ enum DrawerPart: CaseIterable {
 /// Each part gets its own VoiceOver name, so the two brackets don't sound identical.
 func accessibilityLabel(for part: DrawerPart) -> String {
     switch part {
-    case .handle: return "Drawer, left edge"
-    case .wall: return "Drawer, right edge"
-    case .front: return "Closed drawer"
+    case .handle: return String(localized: "Drawer, left edge")
+    case .wall: return String(localized: "Drawer, right edge")
+    case .front: return String(localized: "Closed drawer")
     }
 }
 
 /// What activating any part will do next.
 func accessibilityHelp(for state: DrawerState) -> String {
-    state == .open ? "Click to close the drawer." : "Click to open the drawer."
+    state == .open
+        ? String(localized: "Click to close the drawer.")
+        : String(localized: "Click to open the drawer.")
 }
 
 /// The bracket images' size in points.
