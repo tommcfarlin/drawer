@@ -1,0 +1,55 @@
+# Drawer
+
+A macOS menu bar app that hides icons left of a divider. The product is described in `docs/prd.md` and the technical design in `docs/spec.md`; read both before starting an issue.
+
+## Command line only
+
+- Never require opening Xcode. Use XcodeGen, `xcodebuild`, and `make`.
+- `project.yml` is the source of truth for the Xcode project. `Drawer.xcodeproj` is generated and git-ignored; never hand-edit it.
+- `make project` regenerates the project; `make build`, `make test`, and `make run` regenerate it first.
+
+## Branching & Release Workflow
+
+- **Default branch**: `main`
+- **Release branches**: `release/X.Y.Z` off `main` (current: `release/0.1.0`)
+- **Issue branches**: `feature/<issue>-<slug>` off the release branch, merged back into the release branch
+- **Merge flow**: issue branch -> release branch -> `main`
+- **Commit format**: commitlint (e.g., `feat:`, `fix:`, `refactor:`, `docs:`, `build:`, `test:`, `chore:`)
+- **Test before commit**: `make test` must pass before committing
+- **Milestones**: every issue belongs to a release milestone (e.g., `v0.1.0`) or `Future State`
+
+## Issues
+
+Every issue has:
+
+- a commitlint title (`feat: add toggle status item`),
+- the matching commitlint label (`feat`, `fix`, `docs`, `build`, `test`, `chore`, `refactor`, `perf`, `ci`, `style`, `revert`),
+- a one-to-two-sentence human summary,
+- agent-ready implementation notes (files, spec sections, constraints),
+- acceptance criteria as a checklist. An issue is done when every box is checked.
+
+## Changelog
+
+- Delegate changelog writing to a Claude Haiku subagent (`Agent` with `model: haiku`).
+- Keep a Changelog format, under `## [Unreleased]` until release.
+- One sentence per line, written for users, not developers: plain words, no class or function names.
+
+## Testing
+
+- Tests run via `make test` (`xcodebuild test -scheme Drawer -destination 'platform=macOS,arch=arm64'`)
+- The test target is standalone (non-hosted); source files with pure logic are compiled directly into it
+- No `@testable import` needed; test files use `import XCTest` only
+- Keep decision logic in pure functions (see `DrawerState.swift`) so it's testable
+
+## Architecture
+
+- SwiftUI `App` entry point with `NSApplicationDelegateAdaptor`; no windows, `LSUIElement = YES`
+- AppKit `NSStatusItem`s (not `MenuBarExtra`): a chevron toggle and a `|` divider
+- Collapsing sets the divider's length to 10,000pt, which pushes items to its left off-screen
+- State is persisted in `UserDefaults` under `drawerState`
+- Minimum macOS 26; universal binary; sandboxed; no permissions; no network
+
+## Signing
+
+- 0.1.x: automatic signing with the Apple Development certificate, team `V9DL4KN44P`. No notarization or DMG.
+- 1.0.0+: Developer ID, notarized DMG on GitHub Releases.
