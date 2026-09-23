@@ -339,4 +339,25 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(worst([.allFit, .drawerPartlyHidden(visible: 5), .drawerPartlyHidden(visible: 2)]), .drawerPartlyHidden(visible: 2))
         XCTAssertEqual(worst([.drawerPartlyHidden(visible: 2), .outsideDoesNotFit]), .outsideDoesNotFit)
     }
+
+    // MARK: - notchHint
+
+    func testNoHintWhenEverythingFits() {
+        XCTAssertEqual(notchHint(for: .allFit), [])
+    }
+
+    func testHintForManyVisibleIcons() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 8)), [
+            "Only the 8 Icons Nearest ] Fit Beside the Notch",
+            "⌘-Drag Your Favorites Next to ]",
+        ])
+    }
+
+    func testHintForOneVisibleIcon() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 1)).first, "Only the Icon Nearest ] Fits Beside the Notch")
+    }
+
+    func testHintWhenNoDrawerIconsFit() {
+        XCTAssertEqual(notchHint(for: .drawerPartlyHidden(visible: 0)).first, "No Drawer Icons Fit Beside the Notch")
+    }
 }

@@ -36,6 +36,18 @@
       "comment": "Shown when the drawer can't close because [ is right of ]",
       "extractionState": "manual"
     },
+    "No Drawer Icons Fit Beside the Notch": {
+      "comment": "Notch hint: none of the drawer's icons are visible beside the MacBook notch",
+      "extractionState": "manual"
+    },
+    "Only the %lld Icons Nearest ] Fit Beside the Notch": {
+      "comment": "Notch hint: how many drawer icons are visible beside the notch",
+      "extractionState": "manual"
+    },
+    "Only the Icon Nearest ] Fits Beside the Notch": {
+      "comment": "Notch hint: one drawer icon is visible",
+      "extractionState": "manual"
+    },
     "Open Drawer": {
       "extractionState": "manual"
     },
@@ -56,6 +68,10 @@
     },
     "Throw your menu bar icons into a drawer. Pull them out when you need them.": {
       "comment": "Tagline in the About panel",
+      "extractionState": "manual"
+    },
+    "⌘-Drag Your Favorites Next to ]": {
+      "comment": "Notch hint: suggestion to move favorite icons next to ]",
       "extractionState": "manual"
     }
   },
