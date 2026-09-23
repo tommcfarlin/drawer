@@ -199,6 +199,21 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(clickAction(eventType: .keyDown, modifiers: []), .toggle)
     }
 
+    // MARK: - isNoOp
+
+    func testUserRequestForCurrentStateIsNoOp() {
+        XCTAssertTrue(isNoOp(current: .open, requested: .open, userInitiated: true))
+        XCTAssertTrue(isNoOp(current: .closed, requested: .closed, userInitiated: true))
+    }
+
+    func testUserRequestForOtherStateIsNotNoOp() {
+        XCTAssertFalse(isNoOp(current: .open, requested: .closed, userInitiated: true))
+    }
+
+    func testLaunchRestoreAlwaysApplies() {
+        XCTAssertFalse(isNoOp(current: .open, requested: .open, userInitiated: false))
+    }
+
     // MARK: - restoredState
 
     func testRestoredStateDefaultsToOpenWhenMissing() {
