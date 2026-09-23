@@ -23,6 +23,8 @@ final class StatusBarController: NSObject {
     private let wallItem: NSStatusItem
     private let frontItem: NSStatusItem
     private(set) var state: DrawerState = .open
+    /// Explanations are only shown for changes the user asked for, never at launch.
+    private var lastChangeWasUserInitiated = false
 
     override init() {
         // New status items are inserted to the left of existing ones, so create them
@@ -88,7 +90,7 @@ final class StatusBarController: NSObject {
             if frames.count == items.count,
                frames.allSatisfy({ isPlaced($0, on: screens) }),
                frames == previous {
-                setState(saved, beepIfRefused: false)
+                setState(saved, userInitiated: false)
                 if state != saved { apply(state) }
                 return
             }
@@ -108,16 +110,17 @@ final class StatusBarController: NSObject {
     /// Returns whether the change happened. Closing is refused if the handle isn't
     /// left of the wall.
     @discardableResult
-    func setState(_ newState: DrawerState, beepIfRefused: Bool = true) -> Bool {
+    func setState(_ newState: DrawerState, userInitiated: Bool = true) -> Bool {
         let handleMinX = handleItem.button?.window?.frame.minX
         let wallMinX = wallItem.button?.window?.frame.minX
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
         if newState == .closed, !canClose(handleMinX: handleMinX, wallMinX: wallMinX) {
             Self.log.notice("Refused to close: the handle is not left of the wall")
-            if beepIfRefused { NSSound.beep() }
+            if userInitiated { NSSound.beep() }
             return false
         }
         state = newState
+        lastChangeWasUserInitiated = userInitiated
         apply(state)
         UserDefaults.standard.set(state.rawValue, forKey: Self.stateKey)
         return true
@@ -150,6 +153,7 @@ final class StatusBarController: NSObject {
         NSWorkspace.shared.open(Self.helpURL)
     }
 
+    private static let menuBarFullNotice = String(localized: "The Menu Bar Is Too Full to Close the Drawer")
     private static let misplacedHandleNotice = String(localized: "Move [ to the Left of ] to Use the Drawer")
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
@@ -232,9 +236,15 @@ final class StatusBarController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.frontCheckDelay) { [weak self] in
             guard let self, self.state == .closed else { return }
             let screens = NSScreen.screens.map(\.frame)
-            guard let frame = self.frontItem.button?.window?.frame, isPlaced(frame, on: screens) else {
+            let placed = (self.frontItem.button?.window?.frame).map { isPlaced($0, on: screens) } ?? false
+            guard placed else {
                 Self.log.error("The closed drawer didn't appear on screen; reopening")
-                self.setState(.open)
+                let explain = self.lastChangeWasUserInitiated
+                self.setState(.open, userInitiated: false)
+                if explain {
+                    Self.log.notice("Explaining the reopen to the user")
+                    self.showMenu(from: self.wallItem, notice: Self.menuBarFullNotice)
+                }
                 return
             }
         }

@@ -50,6 +50,10 @@
       "comment": "Accessibility action that opens the drawer menu",
       "extractionState": "manual"
     },
+    "The Menu Bar Is Too Full to Close the Drawer": {
+      "comment": "Shown when the drawer reopens itself because the closed drawer couldn't appear",
+      "extractionState": "manual"
+    },
     "Throw your menu bar icons into a drawer. Pull them out when you need them.": {
       "comment": "Tagline in the About panel",
       "extractionState": "manual"
