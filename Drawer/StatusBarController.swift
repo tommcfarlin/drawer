@@ -133,6 +133,13 @@ final class StatusBarController: NSObject {
         }
     }
 
+    /// Same as a left-click, including explaining a refusal.
+    @objc private func toggleFromMenu() {
+        if !setState(state.toggled) {
+            showMenu(from: wallItem, notice: Self.misplacedHandleNotice)
+        }
+    }
+
     private static let misplacedHandleNotice = "Move [ to the Left of ] to Use the Drawer"
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
@@ -154,6 +161,11 @@ final class StatusBarController: NSObject {
             menu.addItem(line)
             menu.addItem(.separator())
         }
+
+        let toggle = NSMenuItem(title: state.menuActionTitle, action: #selector(toggleFromMenu), keyEquivalent: "")
+        toggle.target = self
+        menu.addItem(toggle)
+        menu.addItem(.separator())
 
         let about = NSMenuItem(title: "About Drawer", action: #selector(showAbout), keyEquivalent: "")
         about.target = self

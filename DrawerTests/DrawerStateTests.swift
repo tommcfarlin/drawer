@@ -26,6 +26,16 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(closedSymbolName, "archivebox")
     }
 
+    // MARK: - menuActionTitle
+
+    func testOpenMenuActionClosesDrawer() {
+        XCTAssertEqual(DrawerState.open.menuActionTitle, "Close Drawer")
+    }
+
+    func testClosedMenuActionOpensDrawer() {
+        XCTAssertEqual(DrawerState.closed.menuActionTitle, "Open Drawer")
+    }
+
     // MARK: - accessibilityLabel
 
     func testOpenAccessibilityLabel() {
