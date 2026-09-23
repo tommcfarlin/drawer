@@ -17,6 +17,7 @@ final class StatusBarController: NSObject {
     private static let restoreMaxAttempts = 30
     private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
     private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
+    private static let frontVisibilityKey = "NSStatusItem VisibleCC DrawerFront"
     /// How long to wait after a change before measuring the notch.
     private static let notchRefreshDelay: TimeInterval = 0.4
     /// How long to wait after closing before confirming the front is on screen.
@@ -277,6 +278,10 @@ final class StatusBarController: NSObject {
 
     private static func seedFrontPosition() {
         let defaults = UserDefaults.standard
+        // The menu bar remembers the front as hidden when Drawer quits with the drawer
+        // open, and re-creating a remembered-hidden item discards its saved position.
+        // Drawer manages the front's visibility itself, so forget that flag.
+        defaults.removeObject(forKey: frontVisibilityKey)
         guard let seeded = seededFrontPosition(savedWallPosition: defaults.object(forKey: wallPositionKey) as? Double) else { return }
         defaults.set(seeded, forKey: frontPositionKey)
     }
@@ -303,9 +308,10 @@ final class StatusBarController: NSObject {
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.frontCheckDelay) { [weak self] in
             guard let self, self.state == .closed else { return }
             let screens = NSScreen.screens.map(\.frame)
-            let placed = (self.frontItem.button?.window?.frame).map { isPlaced($0, on: screens) } ?? false
+            let frame = self.frontItem.button?.window?.frame
+            let placed = frame.map { isPlaced($0, on: screens) } ?? false
             guard placed else {
-                Self.log.error("The closed drawer didn't appear on screen; reopening")
+                Self.log.error("The closed drawer didn't appear on screen (front frame \(frame.map { NSStringFromRect($0) } ?? "none", privacy: .public)); reopening")
                 let explain = self.lastChangeWasUserInitiated
                 self.setState(.open, userInitiated: false)
                 if explain {
