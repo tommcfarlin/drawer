@@ -17,6 +17,8 @@ final class StatusBarController: NSObject {
     private static let restoreMaxAttempts = 30
     private static let frontPositionKey = "NSStatusItem Preferred Position DrawerFront"
     private static let wallPositionKey = "NSStatusItem Preferred Position DrawerWall"
+    /// How long to wait after a change before measuring the notch.
+    private static let notchRefreshDelay: TimeInterval = 0.4
     /// How long to wait after closing before confirming the front is on screen.
     private static let frontCheckDelay: TimeInterval = 0.3
 
@@ -85,6 +87,15 @@ final class StatusBarController: NSObject {
         }
 
         restoreSavedState()
+
+        // Plugging in or removing a display changes what fits beside the notch.
+        NotificationCenter.default.addObserver(
+            forName: NSApplication.didChangeScreenParametersNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated {
+                DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { self?.refreshNotchTooltip() }
+            }
+        }
     }
 
     private var parts: [(DrawerPart, NSStatusItem)] {
@@ -190,15 +201,20 @@ final class StatusBarController: NSObject {
     }
 
     /// Built each time it opens so its contents can reflect the current state.
-    /// A notice, if given, appears first as a dimmed, unclickable line.
+    /// A notice, if given, appears first as a dimmed, unclickable line; otherwise the
+    /// notch hint does, when there is one.
     private func makeMenu(notice: String?) -> NSMenu {
         let menu = NSMenu()
         menu.autoenablesItems = false
 
-        if let notice {
-            let line = NSMenuItem(title: notice, action: nil, keyEquivalent: "")
-            line.isEnabled = false
-            menu.addItem(line)
+        // A refused or failed close takes priority over the notch hint.
+        let lines = notice.map { [$0] } ?? notchHint(for: currentNotchFit())
+        if !lines.isEmpty {
+            for text in lines {
+                let line = NSMenuItem(title: text, action: nil, keyEquivalent: "")
+                line.isEnabled = false
+                menu.addItem(line)
+            }
             menu.addItem(.separator())
         }
 
@@ -242,6 +258,21 @@ final class StatusBarController: NSObject {
             item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
             item.button?.toolTip = state.menuActionTitle
         }
+        // Measure once the menu bar has laid out the change.
+        DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { [weak self] in
+            self?.refreshNotchTooltip()
+        }
+    }
+
+    /// Adds the notch hint's first line to the tooltip of the drawer's visible edge:
+    /// `]` while open, the archive box while closed.
+    private func refreshNotchTooltip() {
+        let edge = state == .open ? wallItem : frontItem
+        guard let first = notchHint(for: currentNotchFit()).first else {
+            edge.button?.toolTip = state.menuActionTitle
+            return
+        }
+        edge.button?.toolTip = state.menuActionTitle + "\n" + first
     }
 
     private static func seedFrontPosition() {
