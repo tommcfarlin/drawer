@@ -7,12 +7,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.1.1] - 2026-09-23
-
-### Fixed
-- Fixed a bug that could hide the archive box icon when launching Drawer with the drawer closed, trapping your menu bar icons.
-- Drawer now automatically reopens if the archive icon goes missing, keeping your icons accessible.
-
 ## [0.1.0] - 2026-09-23
 
 ### Added
