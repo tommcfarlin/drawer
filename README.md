@@ -27,15 +27,24 @@ Drawer remembers whether the drawer was open or closed the next time you launch 
 
 To keep an icon visible all the time, ⌘-drag it to the right of the `]`.
 
-### Good to know
+Before you start, read [Good to know](#good-to-know): closing the drawer also hides anything to the left of `[`.
+
+## Good to know
 
 - **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
-- **Keep `[` to the left of `]`.** If they get swapped, Drawer beeps and won't close.
+- **Keep `[` to the left of `]`.** If they get swapped, Drawer won't close; it beeps and tells you how to fix it.
 - **Can't find the archive box?** macOS sometimes hides menu bar icons when the menu bar is crowded. Open Drawer again (from Finder, Spotlight, or Launchpad) and the drawer opens.
 
 ## Menu
 
-Right-click (or Control-click) `[`, `]`, or the archive box for **About Drawer** and **Quit Drawer**.
+Right-click (or Control-click) `[`, `]`, or the archive box for:
+
+- **Close Drawer** / **Open Drawer**
+- **How to Use Drawer…** (opens this page)
+- **About Drawer**
+- **Quit Drawer**
+
+Hover over any of them to see what a click will do.
 
 ## Requirements
 

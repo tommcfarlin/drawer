@@ -49,7 +49,7 @@ A status item that's shown again with `isVisible = true` lands wherever its save
 - Positions are keyed `NSStatusItem Preferred Position <autosave name>` in Drawer's `UserDefaults`. Each value is the distance from the screen's right edge to the item's **right** edge (`preferredPosition(itemMaxX:screenMaxX:)`), and items are ordered by it: larger means further left. Observed: a wall spanning x 2104–2127 on a 2560pt screen is saved as `433`.
 - Positions only order reliably against other saved positions. If the wall has none yet (it has never been dragged), Drawer records where it already is, which doesn't move it.
 - The front's position is `frontPreferredPosition(wallPosition:)` = the wall's position − 1, which sorts it immediately right of the wall.
-- **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself and logs an error.
+- **Safety net:** 0.3 s after closing, Drawer checks that the front is on screen. If it isn't, there'd be nothing to click, so Drawer reopens itself, logs an error, and (for a close the user asked for) shows the menu with the notice "The Menu Bar Is Too Full to Close the Drawer".
 
 This key is undocumented AppKit behavior. The safety net keeps a future macOS change from stranding the user.
 
@@ -61,7 +61,7 @@ This key is undocumented AppKit behavior. The safety net keeps a future macOS ch
 
 ### Why images, not text
 
-Apple's Human Interface Guidelines say menu bar extras should be template images (ideally SF Symbols), not text. Text characters don't share the size, stroke weight, or vertical centering of the icons around them. The brackets are drawn in code at 7×16pt with a 1.5pt stroke and rounded caps, matching SF Symbols' regular weight at menu bar size. The archive box is `archivebox` at 14pt regular. All three are `isTemplate = true`.
+Apple's Human Interface Guidelines say menu bar extras should be template images (ideally SF Symbols), not text. Text characters don't share the size, stroke weight, or vertical centering of the icons around them. The brackets are drawn in code on a 7×16pt canvas as filled rectangles from `bracketRects(opening:scale:)`. Every edge lands on a whole device pixel at the display's backing scale: the stroke is 3px (1.5pt) on Retina and 1px on 1x displays, where 1.5px would be smoothed across two pixels. The archive box is `archivebox` at 14pt regular. All three are `isTemplate = true`.
 
 This technique uses only public API and needs no permissions. It's the same basic approach used by Vanilla and Hidden Bar.
 
@@ -90,7 +90,10 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 
 | Symbol | Behavior |
 |--------|----------|
-| `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `accessibilityLabel` ("Close drawer" / "Open drawer") |
+| `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `menuActionTitle` ("Close Drawer" / "Open Drawer") |
+| `enum DrawerPart { handle, wall, front }` | `accessibilityLabel(for:)`; `accessibilityHelp(for: DrawerState)` |
+| `clickAction(eventType:modifiers:)` | `.showMenu` for right-up or Control + left-up; otherwise `.toggle` |
+| `bracketSize`, `bracketRects(opening:scale:)` | Pixel-aligned rectangles for `[` / `]` |
 | `closedSymbolName` | `archivebox` |
 | `wallClosedLength` | `10_000` |
 | `wallLength(for:)` | Closed: `10_000`. Open: `variableLength`. |
@@ -110,10 +113,17 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 
 ### Clicks
 
-All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMouseUp])`:
+All three buttons share one action with `sendAction(on: [.leftMouseUp, .rightMouseUp])`. `clickAction(eventType:modifiers:)` decides what a press does:
 
 - A right-click, or a left-click with Control held, shows the menu anchored to the clicked item.
-- Any other click toggles the drawer.
+- Anything else toggles the drawer, including a VoiceOver or keyboard press with no mouse event.
+- If closing is refused, Drawer beeps and shows the menu from the clicked item with the notice "Move [ to the Left of ] to Use the Drawer".
+
+Each button also has an `NSAccessibilityCustomAction` named "Show Menu", because VoiceOver can't right-click.
+
+### Reopening from outside
+
+`AppDelegate.applicationShouldHandleReopen` opens the drawer whenever Drawer is opened again while running. This is the way back if macOS hides the archive box later (a crowded menu bar, the notch, or System Settings → Menu Bar).
 
 ### Opening and closing
 
@@ -136,10 +146,15 @@ For about the first 100–250 ms after launch, the menu bar reports placeholder 
 
 ### Right-click menu
 
-The menu is built once. It's shown with `item.menu = menu; item.button?.performClick(nil); item.menu = nil`, so it anchors like a native menu while a plain left-click still toggles.
+The menu is built each time it opens (`makeMenu(notice:)`), so its first item reflects the current state. It's shown with `item.menu = menu; item.button?.performClick(nil); item.menu = nil`, so it anchors like a native menu while a plain left-click still toggles.
 
 | Item | Action |
 |------|--------|
+| *(optional)* notice | Dimmed and disabled; explains a refused or failed close |
+| — | separator (only after a notice) |
+| Close Drawer / Open Drawer | `state.menuActionTitle`; same as a left-click, including the refusal notice |
+| — | separator |
+| How to Use Drawer… | Opens `https://github.com/tommcfarlin/drawer#setup` |
 | About Drawer | `NSApp.activate()` then `orderFrontStandardAboutPanel(options:)` |
 | — | separator |
 | Quit Drawer | `NSApp.terminate(nil)`, key equivalent `q` |
@@ -187,8 +202,17 @@ log stream --level debug --predicate 'subsystem == "co.pressware.drawer"'
 
 ## Accessibility
 
-- All three items carry the same label, the action a click will take: "Close drawer" while open, "Open drawer" while closed.
+- Each item has its own VoiceOver label from `accessibilityLabel(for: DrawerPart)`: "Drawer, left edge", "Drawer, right edge", "Closed drawer".
+- Help from `accessibilityHelp(for:)` says what activating any item will do: "Click to close the drawer." / "Click to open the drawer."
+- Tooltips use `state.menuActionTitle`.
+- Any press that isn't a right-click toggles; the "Show Menu" custom action reaches the menu.
 - The items are reachable with VoiceOver through the standard menu bar navigation.
+
+## Localization
+
+- All user-facing text uses `String(localized:)` and lives in `Drawer/Localizable.xcstrings` (English source, `developmentLanguage: en`, `LOCALIZATION_PREFERS_STRING_CATALOGS = YES`, `SWIFT_EMIT_LOC_STRINGS = YES`).
+- The built app bundles `en.lproj/Localizable.strings`. No other languages yet.
+- Unit tests run outside the app bundle, so lookups fall back to the English keys, which the tests assert.
 
 ## Security and privacy
 
@@ -207,16 +231,13 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (29):
+Unit tests (43):
 
-- `toggled` flips both ways.
-- `showsFront` is false when open and true when closed; `closedSymbolName` is `archivebox`.
-- `accessibilityLabel` is "Close drawer" when open and "Open drawer" when closed.
-- `wallLength(for:)` is `10_000` when closed and `variableLength` when open.
-- `preferredPosition` matches what the menu bar saves (a wall spanning x 2104–2127 on a 2560pt screen → `433`) and works on a secondary screen; `frontPreferredPosition` is the wall's position − 1.
-- `canClose`: handle left of wall → true; handle right of wall → false; equal → false; either nil → false.
-- `restoredState`: nil, garbage, or a value from the old design (`collapsed`) → `.open`; valid raw values round-trip.
-- `isPlaced`: inside the main or a secondary screen → true; zero height, below every screen, past the right edge, or no screens → false.
+- `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
+- VoiceOver: each part's label is distinct, and help matches the next action.
+- `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
+- `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
+- `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
 
 Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
 
@@ -231,7 +252,12 @@ Manual QA checklist:
 - No hover highlight or empty space appears next to `]` while open.
 - Quit and relaunch in each state; the state is restored.
 - Drag `[` to the right of `]`; closing is refused with a beep.
-- Right-click or Control-click any of the three items to get About/Quit; About shows 🗄️, the tagline, and working links.
+- Right-click or Control-click any of the three items: Close/Open Drawer, How to Use Drawer…, About Drawer, Quit Drawer. About shows 🗄️, the tagline, and working links.
+- Drag `[` right of `]` and click: beep plus the explanation menu.
+- Hover each item: the tooltip matches what a click will do.
+- With the drawer closed, open Drawer again: the drawer opens.
+- VoiceOver: distinct labels, VO-Space toggles, VO-Command-Space → Show Menu.
+- On a 1x display the brackets look as crisp as neighboring SF Symbols.
 - Light and dark menu bar, and a tinted/transparent menu bar: `[`, `]`, and the archive box stay legible and match neighboring icons.
 - Intel and Apple silicon builds run.
 
