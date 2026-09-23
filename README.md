@@ -31,6 +31,7 @@ To keep an icon visible all the time, ⌘-drag it to the right of the `]`.
 
 - **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
 - **Keep `[` to the left of `]`.** If they get swapped, Drawer beeps and won't close.
+- **Can't find the archive box?** macOS sometimes hides menu bar icons when the menu bar is crowded. Open Drawer again (from Finder, Spotlight, or Launchpad) and the drawer opens.
 
 ## Menu
 
