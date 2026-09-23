@@ -278,13 +278,14 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (61):
+Unit tests (67):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
 - `wallLength(for:)`, `preferredPosition`, `frontPreferredPosition`, `canClose`, `restoredState`, `isPlaced` (as before).
 - `clickAction`: right-up and Control + left-up → menu; left-up, no event, and key-down → toggle.
 - Bounce: keyframes start and end at rest, key times match and span the duration, and the bounce stays subtle (under 0.5 s, scale 0.8–1.15).
+- Notch: `notchHint` for all fit (none), many/one/zero visible, and the outside-doesn't-fit warning; the warning outranks partly hidden.
 - Notch: `notchFit` for partly hidden (with tolerance), all fit, none fit, wall hidden, closed with the front showing or hidden, unknown wall; right-edge offsets round-trip across displays; `worst` picks the most serious result.
 - `seededFrontPosition`: follows the wall's saved position; nothing without one.
 - `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
