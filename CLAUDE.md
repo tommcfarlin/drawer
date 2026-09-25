@@ -61,5 +61,6 @@ Every issue has:
 
 ## Signing
 
-- 0.1.x: automatic signing with the Apple Development certificate, team `V9DL4KN44P`. No notarization or DMG.
-- 1.0.0+: Developer ID, notarized DMG on GitHub Releases.
+- Local builds (`make build`/`make run`): automatic signing with the Apple Development certificate, team `V9DL4KN44P`.
+- Public releases (0.2.0+): `make release` exports with Developer ID (`scripts/ExportOptions.plist`), builds `build/Drawer.dmg`, notarizes with the `drawer-notary` keychain profile, and staples it.
+- Attach the DMG to the GitHub Release as `Drawer.dmg`; pressware.co/apps/drawer/ links to `releases/latest/download/Drawer.dmg`.
