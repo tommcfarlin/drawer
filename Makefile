@@ -40,8 +40,12 @@ icon:
 # One-time setup: xcrun notarytool store-credentials drawer-notary --apple-id <email> --team-id V9DL4KN44P
 release: project
 	rm -rf $(ARCHIVE) $(EXPORT) $(DMG_STAGE) $(DMG)
-	$(XCB) -configuration Release archive -archivePath $(ARCHIVE)
+	$(XCB) -quiet -configuration Release archive -archivePath $(ARCHIVE)
 	xcodebuild -exportArchive -archivePath $(ARCHIVE) -exportPath $(EXPORT) -exportOptionsPlist scripts/ExportOptions.plist
+	# Staple the app too, so it passes Gatekeeper offline once it's copied out of the DMG.
+	ditto -c -k --keepParent $(EXPORT)/Drawer.app $(EXPORT)/Drawer.zip
+	xcrun notarytool submit $(EXPORT)/Drawer.zip --keychain-profile $(NOTARY_PROFILE) --wait
+	xcrun stapler staple $(EXPORT)/Drawer.app
 	mkdir -p $(DMG_STAGE)
 	cp -R $(EXPORT)/Drawer.app $(DMG_STAGE)/
 	ln -s /Applications $(DMG_STAGE)/Applications
