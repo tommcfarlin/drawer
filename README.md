@@ -4,7 +4,13 @@
 
 A tiny macOS menu bar app that hides your menu bar icons with one click and brings them back with another. There are no preferences and no permissions to grant.
 
-> Drawer is in early development (0.1.x) and isn't available to download yet.
+## Download
+
+[Download Drawer for Mac](https://github.com/tommcfarlin/drawer/releases/latest/download/Drawer.dmg) (macOS 26 Tahoe or later).
+
+Open the DMG and drag Drawer into Applications. Drawer is signed with Developer ID and notarized by Apple.
+
+> Drawer is in early development (0.x). Expect rough edges, and email [support@pressware.co](mailto:support@pressware.co) if you find one.
 
 ## How it works
 
@@ -62,6 +68,16 @@ make build   # generate the project and build
 make test    # run the unit tests
 make run     # build and launch
 ```
+
+### Releasing
+
+`make release` builds a Developer ID-signed, notarized, and stapled `build/Drawer.dmg`. It needs the Developer ID Application certificate in your keychain and a one-time notary profile:
+
+```bash
+xcrun notarytool store-credentials drawer-notary --apple-id <email> --team-id V9DL4KN44P
+```
+
+Upload the DMG to the GitHub Release as `Drawer.dmg` (no version in the name) so the download link always gets the latest version.
 
 ## Support
 
