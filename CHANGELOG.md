@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-10-09
+
 ### Added
 - Drawer works on macOS 27.
 - On macOS 27, closing the drawer hides the apps inside it instantly, with no sliding, and the `]` turns into the archive box right where it was.
