@@ -5,10 +5,11 @@ import os
 /// Owns Drawer's three menu bar items, left to right: the `[` handle, the `]` wall,
 /// and the front.
 ///
-/// Everything between the handle and the wall is in the drawer. Closing stretches
-/// the wall so wide that it, the handle, and everything left of it are pushed
-/// off-screen. The front, which only exists while closed, then shows an archive box
-/// in their place.
+/// Everything between the handle and the wall is in the drawer. On macOS 26, closing
+/// stretches the wall so wide that it, the handle, and everything left of it are pushed
+/// off-screen; the front, which only exists while closed, then shows an archive box in
+/// their place. From macOS 27, closing hides the drawer's apps with the menu bar's
+/// allowlist, hides the handle, and the wall itself becomes the archive box.
 @MainActor
 final class StatusBarController: NSObject {
     private static let stateKey = "drawerState"
@@ -39,6 +40,17 @@ final class StatusBarController: NSObject {
     private(set) var state: DrawerState = .open
     /// Explanations are only shown for changes the user asked for, never at launch.
     private var lastChangeWasUserInitiated = false
+    /// Why the last close was refused, for the menu that explains it.
+    private var refusalNotice: String?
+
+    /// macOS 27 and later: the drawer's apps are hidden with the menu bar's allowlist
+    /// (see **Allowlist** below), found with Accessibility.
+    private let allowlistMenuBar = usesMenuBarAllowlist(majorVersion: ProcessInfo.processInfo.operatingSystemVersion.majorVersion)
+    /// While closed on macOS 27: the apps in the drawer, and the assertion hiding them.
+    private var hiddenApps: Set<String> = []
+    private var restriction: Any?
+    /// The item whose image is swapped out for a bounce.
+    private var bouncingItem: NSStatusItem?
 
     override init() {
         // The front is created before anything can be measured. Without a saved
@@ -53,7 +65,8 @@ final class StatusBarController: NSObject {
         // Start visible so the menu bar records the front's spot just right of the
         // wall; it's hidden once launch settles if the drawer is open. Hiding it
         // before it has a spot would bring it back at the far left, off-screen.
-        frontItem.isVisible = true
+        // From macOS 27 the wall stands in for the front, so it's never shown.
+        frontItem.isVisible = !allowlistMenuBar
 
         wallItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         wallItem.autosaveName = "DrawerWall"
@@ -81,6 +94,7 @@ final class StatusBarController: NSObject {
         }
 
         handleItem.button?.image = Self.bracket(opening: true)
+        if allowlistMenuBar { handleItem.length = bracketSize.width + handleExtraLength }
         wallItem.button?.image = wallImage
         frontItem.button?.image = closedImageValue
         for (face, item) in [(wallFace, wallItem), (frontFace, frontItem)] {
@@ -91,6 +105,7 @@ final class StatusBarController: NSObject {
             item.button?.addSubview(face)
         }
 
+        updateLabels()
         restoreSavedState()
 
         // Plugging in or removing a display changes what fits beside the notch.
@@ -100,6 +115,13 @@ final class StatusBarController: NSObject {
             MainActor.assumeIsolated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { self?.refreshNotchTooltip() }
             }
+        }
+        // The allowlist names the apps that may show icons, so an app launched while
+        // the drawer is closed has to be added to it.
+        NSWorkspace.shared.notificationCenter.addObserver(
+            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.refreshRestriction() }
         }
     }
 
@@ -113,18 +135,33 @@ final class StatusBarController: NSObject {
     /// the front has a recorded spot before it's hidden.
     private func restoreSavedState() {
         let saved = restoredState(from: UserDefaults.standard.string(forKey: Self.stateKey))
-        let items = [handleItem, wallItem, frontItem]
+        // From macOS 27 the front is never in the menu bar.
+        let items = allowlistMenuBar ? [handleItem, wallItem] : [handleItem, wallItem, frontItem]
         var previous: [CGRect]?
         var attempts = 0
 
         func check() {
             attempts += 1
             let screens = NSScreen.screens.map(\.frame)
-            let frames = items.compactMap { $0.button?.window?.frame }
+            let frames: [CGRect]
+            let placed: Bool
+            if allowlistMenuBar {
+                // AppKit's frames are unreliable here; the Accessibility tree isn't. Without
+                // permission there's nothing to wait for: the drawer can only open.
+                guard MenuBarLayout.isTrusted else {
+                    setState(.open, userInitiated: false)
+                    return
+                }
+                let display = MenuBarLayout.displays().first { $0.slot(for: wallItem) != nil }
+                let slots = items.compactMap { display?.slot(for: $0) }
+                frames = slots.map { CGRect(x: $0.minX, y: 0, width: $0.width, height: 1) }
+                placed = frames.count == items.count
+            } else {
+                frames = items.compactMap { $0.button?.window?.frame }
+                placed = frames.count == items.count && frames.allSatisfy { isPlaced($0, on: screens) }
+            }
 
-            if frames.count == items.count,
-               frames.allSatisfy({ isPlaced($0, on: screens) }),
-               frames == previous {
+            if placed, frames == previous {
                 setState(saved, userInitiated: false)
                 if state != saved { apply(state) }
                 return
@@ -147,13 +184,44 @@ final class StatusBarController: NSObject {
     @discardableResult
     func setState(_ newState: DrawerState, userInitiated: Bool = true) -> Bool {
         guard !isNoOp(current: state, requested: newState, userInitiated: userInitiated) else { return true }
-        let handleMinX = handleItem.button?.window?.frame.minX
-        let wallMinX = wallItem.button?.window?.frame.minX
+        if newState == .closed, allowlistMenuBar {
+            // Closing needs the allowlist, and Accessibility to see what's in the drawer.
+            guard DRMenuBarRestriction.isAvailable() else {
+                Self.log.error("Refused to close: the menu bar allowlist isn't available")
+                refusalNotice = Self.unavailableNotice
+                return false
+            }
+            guard MenuBarLayout.isTrusted else {
+                Self.log.notice("Refused to close: Drawer isn't allowed to use Accessibility")
+                if userInitiated { MenuBarLayout.requestTrust() }
+                refusalNotice = Self.accessibilityNotice
+                return false
+            }
+        }
+        var handleMinX = handleItem.button?.window?.frame.minX
+        var wallMinX = wallItem.button?.window?.frame.minX
+        var drawerDisplay: MenuBarLayout.Display?
+        if allowlistMenuBar {
+            // The drawer is measured on a display where both brackets are in the menu bar
+            // itself, not stacked in the overflow menu beside a notch.
+            let displays = MenuBarLayout.displays()
+            drawerDisplay = displays.first { display in
+                guard let handle = display.slot(for: handleItem), let wall = display.slot(for: wallItem) else { return false }
+                let others = display.slots.map(\.slot)
+                return isClear(handle, of: others.filter { $0 != handle }) && isClear(wall, of: others.filter { $0 != wall })
+            } ?? displays.first { $0.slot(for: wallItem) != nil }
+            handleMinX = drawerDisplay?.slot(for: handleItem)?.minX
+            wallMinX = drawerDisplay?.slot(for: wallItem)?.minX
+        }
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
         if newState == .closed, !canClose(handleMinX: handleMinX, wallMinX: wallMinX) {
             Self.log.notice("Refused to close: the handle is not left of the wall")
             if userInitiated { NSSound.beep() }
+            refusalNotice = Self.misplacedHandleNotice
             return false
+        }
+        if allowlistMenuBar, newState == .closed {
+            hiddenApps = Set(appsInDrawer(on: drawerDisplay))
         }
         state = newState
         lastChangeWasUserInitiated = userInitiated
@@ -161,6 +229,7 @@ final class StatusBarController: NSObject {
         UserDefaults.standard.set(state.rawValue, forKey: Self.stateKey)
         if userInitiated && !NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
             switch state {
+            case .closed where allowlistMenuBar: bounce(wallItem, face: wallFace, image: closedImageValue, nativeSymbol: true)
             case .closed: bounce(frontItem, face: frontFace, image: closedImageValue, nativeSymbol: true)
             case .open: bounce(wallItem, face: wallFace, image: wallImage, nativeSymbol: false)
             }
@@ -177,7 +246,7 @@ final class StatusBarController: NSObject {
         case .toggle:
             if !setState(state.toggled) {
                 // A beep alone is easy to miss; say why, right where they clicked.
-                showMenu(from: item, notice: Self.misplacedHandleNotice)
+                showMenu(from: item, notice: refusalNotice)
             }
         }
     }
@@ -185,7 +254,7 @@ final class StatusBarController: NSObject {
     /// Same as a left-click, including explaining a refusal.
     @objc private func toggleFromMenu() {
         if !setState(state.toggled) {
-            showMenu(from: wallItem, notice: Self.misplacedHandleNotice)
+            showMenu(from: wallItem, notice: refusalNotice)
         }
     }
 
@@ -197,6 +266,8 @@ final class StatusBarController: NSObject {
 
     private static let menuBarFullNotice = String(localized: "The Menu Bar Is Too Full to Close the Drawer")
     private static let misplacedHandleNotice = String(localized: "Move [ to the Left of ] to Use the Drawer")
+    private static let accessibilityNotice = String(localized: "Allow Drawer in Accessibility Settings to Close the Drawer")
+    private static let unavailableNotice = String(localized: "This Version of macOS Can't Hide Menu Bar Icons")
 
     /// Attach the menu only while it's open so a plain left-click keeps toggling.
     private func showMenu(from item: NSStatusItem, notice: String? = nil) {
@@ -243,6 +314,11 @@ final class StatusBarController: NSObject {
     }
 
     private func apply(_ state: DrawerState) {
+        if allowlistMenuBar {
+            applyAllowlist(state)
+            updateLabels()
+            return
+        }
         if state.showsFront {
             if !frontItem.isVisible {
                 // A re-shown item lands wherever its saved position says, and the menu
@@ -258,14 +334,22 @@ final class StatusBarController: NSObject {
         wallItem.length = wallLength(for: state)
         if !state.showsFront { frontItem.isVisible = false }
 
-        for (part, item) in parts {
-            item.button?.setAccessibilityLabel(accessibilityLabel(for: part))
-            item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
-            item.button?.toolTip = state.menuActionTitle
-        }
+        updateLabels()
         // Measure once the menu bar has laid out the change.
         DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { [weak self] in
             self?.refreshNotchTooltip()
+        }
+    }
+
+    /// On macOS 27 the labels also identify Drawer's items in the menu bar's
+    /// Accessibility tree, so they're set from the start.
+    private func updateLabels() {
+        for (part, item) in parts {
+            // From macOS 27 the wall is the closed drawer.
+            let shown = allowlistMenuBar && state == .closed && part == .wall ? .front : part
+            item.button?.setAccessibilityLabel(accessibilityLabel(for: shown))
+            item.button?.setAccessibilityHelp(accessibilityHelp(for: state))
+            item.button?.toolTip = state.menuActionTitle
         }
     }
 
@@ -334,12 +418,91 @@ final class StatusBarController: NSObject {
         }
     }
 
+    // MARK: - Allowlist (macOS 27)
+
+    /// The bundle IDs of the apps whose icons sit between the brackets. System items
+    /// (owned by `MenuBarAgent`) can't be left off the allowlist one by one, so they stay.
+    private func appsInDrawer(on display: MenuBarLayout.Display?) -> [String] {
+        guard let display, let handle = display.slot(for: handleItem), let wall = display.slot(for: wallItem) else { return [] }
+        let ownPID = ProcessInfo.processInfo.processIdentifier
+        let agentPIDs = Set(NSRunningApplication.runningApplications(withBundleIdentifier: MenuBarLayout.agentBundleID).map(\.processIdentifier))
+        let slots = display.slots
+            .filter { $0.owner != ownPID && !agentPIDs.contains($0.owner) }
+            .map { (slot: $0.slot, owner: $0.owner) }
+        let apps = owners(between: handle, and: wall, in: slots).compactMap {
+            NSRunningApplication(processIdentifier: $0)?.bundleIdentifier
+        }
+        Self.log.debug("apps in the drawer: \(apps.joined(separator: ", "), privacy: .public)")
+        return apps
+    }
+
+    private func applyAllowlist(_ state: DrawerState) {
+        switch state {
+        case .closed:
+            refreshRestriction()
+            handleItem.isVisible = false
+        case .open:
+            hiddenApps = []
+            if let restriction { DRMenuBarRestriction.invalidate(restriction) }
+            restriction = nil
+            handleItem.isVisible = true
+        }
+        if bouncingItem !== wallItem { wallItem.button?.image = restingImage(for: wallItem) }
+    }
+
+    /// Replaces the assertion with one allowing every running app but the drawer's.
+    /// The newest assertion wins at once, so the old one is only dropped once the new one
+    /// is active: the drawer's icons never flash back.
+    private func refreshRestriction() {
+        guard allowlistMenuBar, state == .closed else { return }
+        let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+        let allowed = allowedApps(running: running, hidden: hiddenApps)
+        let previous = restriction
+        let token = DRMenuBarRestriction.activateAllowing(allowed) { [weak self] error in
+            guard let self else { return }
+            if let error {
+                Self.log.error("Couldn't hide the drawer's icons: \(error.localizedDescription, privacy: .public); reopening")
+                self.reopenAfterFailedClose()
+                return
+            }
+            if let previous { DRMenuBarRestriction.invalidate(previous) }
+        }
+        guard let token else {
+            Self.log.error("The menu bar allowlist is unavailable; reopening")
+            reopenAfterFailedClose()
+            return
+        }
+        restriction = token
+    }
+
+    private func reopenAfterFailedClose() {
+        guard state == .closed else { return }
+        let explain = lastChangeWasUserInitiated
+        setState(.open, userInitiated: false)
+        if explain {
+            Self.log.notice("Explaining the reopen to the user")
+            showMenu(from: wallItem, notice: Self.unavailableNotice)
+        }
+    }
+
+    /// What an item shows when it isn't bouncing. From macOS 27 the wall is the archive
+    /// box while closed.
+    private func restingImage(for item: NSStatusItem) -> NSImage? {
+        if item === wallItem {
+            return allowlistMenuBar && state == .closed ? closedImageValue : wallImage
+        }
+        return item === frontItem ? closedImageValue : item.button?.image
+    }
+
     // MARK: - Notch
 
     /// How the notch affects the drawer right now, worst case across notched displays,
     /// and whether any display has a notch at all. `fit` is nil when Drawer's own items
     /// haven't been laid out yet (for example, just after opening), so it can't tell.
     func currentNotchFit() -> (hasNotch: Bool, fit: NotchFit?) {
+        // From macOS 27, status items aren't in the window list, so there's nothing to
+        // measure; the system's overflow menu now holds whatever doesn't fit.
+        guard !allowlistMenuBar else { return (false, nil) }
         // Drawer's own frames may come from any display's menu bar copy; carry each one
         // over to the notched display by its distance from the right edge.
         func offset(of item: NSStatusItem) -> CGFloat? {
@@ -400,6 +563,7 @@ final class StatusBarController: NSObject {
         // Wait a turn so a just-shown item has been laid out.
         DispatchQueue.main.async { [weak self] in
             guard let self, let button = item.button, let image else { return }
+            self.bouncingItem = item
             face.image = image
             face.frame = CGRect(
                 x: ((button.bounds.width - image.size.width) / 2).rounded(),
@@ -424,7 +588,9 @@ final class StatusBarController: NSObject {
                 face.removeAllSymbolEffects()
                 face.layer?.removeAnimation(forKey: "bounce")
                 // Only restore if nothing changed the item since.
-                if self != nil, button.image === placeholder { button.image = image }
+                guard let self else { return }
+                if self.bouncingItem === item { self.bouncingItem = nil }
+                if button.image === placeholder { button.image = self.restingImage(for: item) }
             }
         }
     }

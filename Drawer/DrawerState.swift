@@ -253,3 +253,55 @@ func notchFitToExplain(hasNotch: Bool, state: DrawerState, current: NotchFit?, l
     if state == .open, let current { return current }
     return lastOpen ?? .allFit
 }
+
+// MARK: - Allowlist (macOS 27)
+
+/// From macOS 27, the menu bar no longer pushes items off-screen: an item wider than
+/// about half its display is dropped instead, and stretching anything narrower slides
+/// every icon across the bar. So Drawer hides the drawer's apps with the menu bar's
+/// allowlist: apps left off it simply aren't drawn, and the rest close up to the right.
+func usesMenuBarAllowlist(majorVersion: Int) -> Bool {
+    majorVersion >= 27
+}
+
+/// One status item's slot in a display's menu bar, from the Accessibility tree.
+struct MenuBarSlot: Equatable {
+    let minX: CGFloat
+    let width: CGFloat
+
+    var maxX: CGFloat { minX + width }
+}
+
+/// Whether a slot is in the menu bar itself. Icons that don't fit (beside the notch, say)
+/// go into the system's overflow menu and keep a slot, stacked on top of each other.
+func isClear(_ slot: MenuBarSlot, of others: [MenuBarSlot], tolerance: CGFloat = 2) -> Bool {
+    !others.contains { min(slot.maxX, $0.maxX) - max(slot.minX, $0.minX) > tolerance }
+}
+
+/// macOS 27's Accessibility tree doesn't say which of Drawer's slots is which, so each
+/// item is told apart by width: AppKit reports its items' widths correctly even when
+/// their positions come from another display's copy. Nil unless exactly one matches.
+func uniqueSlot(width: CGFloat, among slots: [MenuBarSlot], tolerance: CGFloat = 1) -> MenuBarSlot? {
+    let matches = slots.filter { abs($0.width - width) <= tolerance }
+    return matches.count == 1 ? matches[0] : nil
+}
+
+/// On macOS 27 the handle is this much longer than its image, so its slot is wider than
+/// the wall's and the two can be told apart. Even, so the image stays on whole points.
+let handleExtraLength: CGFloat = 2
+
+/// The owners of every slot between the handle and the wall, in order, each once.
+func owners<Owner: Hashable>(between handle: MenuBarSlot, and wall: MenuBarSlot, in slots: [(slot: MenuBarSlot, owner: Owner)]) -> [Owner] {
+    var seen = Set<Owner>()
+    return slots
+        .filter { $0.slot.minX >= handle.maxX - 1 && $0.slot.maxX <= wall.minX + 1 }
+        .sorted { $0.slot.minX < $1.slot.minX }
+        .compactMap { seen.insert($0.owner).inserted ? $0.owner : nil }
+}
+
+/// Every running app may draw its icons except the ones in the drawer. Apps that launch
+/// later are added as they launch, so a new app's icon still shows.
+func allowedApps(running: [String], hidden: Set<String>) -> [String] {
+    var seen = Set<String>()
+    return running.filter { !hidden.contains($0) && seen.insert($0).inserted }
+}
