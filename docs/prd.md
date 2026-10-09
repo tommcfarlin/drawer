@@ -1,9 +1,9 @@
 # Drawer — Product Requirements Document
 
-**Version:** 0.2.0 (personal build; 1.0.0 is the first public release)
+**Version:** 0.3.0 (1.0.0 is the first public release)
 **Author:** Tom McFarlin
 **Status:** Draft
-**Last updated:** 2026-09-23
+**Last updated:** 2026-10-09
 
 ## Summary
 
@@ -22,7 +22,7 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 - Hide every icon inside the drawer (between `[` and `]`) with one click.
 - Show them again with one click.
 - Remember whether the drawer was open or closed across launches.
-- Require no special permissions.
+- Require no special permissions on macOS 26. From macOS 27, require only Accessibility, asked for the first time the drawer closes.
 - Look and feel like a native part of macOS.
 - (0.2.0) On a MacBook with a notch, tell people how many drawer icons fit beside it, so they can keep their favorites where they stay visible.
 
@@ -45,6 +45,12 @@ Existing tools (Vanilla, Bartender, Ice) solve this, but most of them ship with 
 - Showing or opening icons hidden by the notch. That needs Accessibility permission; it's planned as an opt-in drop-down (#29).
 - Opening or closing the drawer automatically. Closing on its own would fight a manual open, and open/closed is shared across displays.
 - Any new permission.
+
+## Non-goals (0.3.0)
+
+- Hiding individual icons of an app that has several (macOS 27 hides per app).
+- Hiding macOS's own icons (Bluetooth, Wi-Fi, the clock, and so on) on macOS 27.
+- Revealing hidden icons without opening the drawer.
 
 ## Target user
 
@@ -120,6 +126,28 @@ On a MacBook with a notch, the menu bar only has the space to the right of the n
 - A notice about a refused or failed close takes priority in the menu.
 - It's measured without permissions, and refreshed when the drawer changes, when the menu opens, and when displays change.
 
+### macOS 27 (0.3.0)
+
+macOS 27 rebuilt the menu bar. A status item stretched past about half the display is dropped instead of pushing its neighbors off-screen, and stretching anything narrower slides every icon across the bar before it lands in the system's new overflow menu. So the wall trick no longer closes the drawer.
+
+From macOS 27, Drawer closes with the menu bar's own allowlist, the facility behind macOS's exam (assessment) mode:
+
+| | Open | Closed |
+|---|---|---|
+| `[` | Visible | Hidden |
+| `]` | Visible | Becomes the archive box, in place |
+| Apps in the drawer | Visible | Not drawn |
+| Everything else | Visible | Visible, closed up to the right |
+
+- **Accessibility:** Drawer reads which apps' icons sit between `[` and `]`. The first close asks for Accessibility; until it's allowed, Drawer stays open and explains: "Allow Drawer in Accessibility Settings to Close the Drawer".
+- **Per app:** the allowlist names apps, so an app with icons both inside and outside the drawer hides entirely.
+- **System icons stay**, except AirDrop, Focus, and Now Playing, which the allowlist hides while the drawer is closed.
+- **New apps** launched while closed are added to the allowlist, so their icons still show.
+- **Icons left of `[`** stay visible (unlike macOS 26).
+- **No slide:** hidden icons simply aren't drawn; the rest close up to the right.
+- **Private API:** the allowlist isn't public. If a macOS update removes it, closing is refused with "This Version of macOS Can't Hide Menu Bar Icons" and the drawer stays open. Quitting Drawer always brings every icon back.
+- **The notch hint is off** on macOS 27: the window list it measured is empty there, and the system overflow menu now holds icons that don't fit.
+
 ### State persistence
 
 Whether the drawer is open or closed is saved and restored on the next launch. macOS restores the positions of `[` and `]`.
@@ -170,8 +198,8 @@ Standard macOS About panel, matching Now Playing on Spotify:
 |----|-------------|
 | N1 | Minimum macOS 26 Tahoe. |
 | N2 | Universal binary (Apple silicon + Intel). |
-| N3 | Requires no permissions (no Accessibility, Screen Recording, or Automation). |
-| N4 | App Sandbox and Hardened Runtime enabled. |
+| N3 | macOS 26: requires no permissions. macOS 27: requires only Accessibility, asked for on the first close; never Screen Recording or Automation. |
+| N4 | Hardened Runtime enabled. Not sandboxed from 0.3.0, because sandboxed apps can't use Accessibility on other apps. Settings from the sandboxed 0.2.0 are copied over once. |
 | N5 | 0.1.x: built and run locally with an Apple Development certificate. 1.0.0+: distributed as a notarized, Developer ID–signed DMG. |
 | N6 | Idle CPU usage effectively zero; no polling or timers (a bounded check at launch is allowed). |
 | N7 | VoiceOver: each item has its own label ("Drawer, left edge", "Drawer, right edge", "Closed drawer") and help ("Click to close/open the drawer."); any press that isn't a right-click toggles; a "Show Menu" action reaches the menu. |
@@ -203,8 +231,11 @@ Standard macOS About panel, matching Now Playing on Spotify:
 
 - **Notch (0.2.0):** a permission-free ordering hint and an outside-doesn't-fit warning, both passive. No automatic opening or closing. An opt-in Accessibility drop-down for hidden icons comes later (#29). Decided 2026-09-23.
 
+- **macOS 27 (0.3.0):** close with the menu bar allowlist and Accessibility, drop the App Sandbox. A wider stretched wall was tried and dropped: it slid every icon across the bar. Decided 2026-10-09.
+
 ## Release plan
 
 - **0.1.x:** personal builds for Tom's own use.
-- **0.2.0:** notch awareness (personal build).
+- **0.2.0:** notch awareness.
+- **0.3.0:** macOS 27 support.
 - **1.0.0:** the first release to other people.
