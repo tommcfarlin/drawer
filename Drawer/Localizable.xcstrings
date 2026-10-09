@@ -4,6 +4,9 @@
     "About Drawer": {
       "extractionState": "manual"
     },
+    "Allow Drawer in Accessibility Settings to Close the Drawer": {
+      "extractionState": "manual"
+    },
     "Click to close the drawer.": {
       "extractionState": "manual"
     },
@@ -68,6 +71,9 @@
     },
     "The Menu Bar Is Too Full to Close the Drawer": {
       "comment": "Shown when the drawer reopens itself because the closed drawer couldn't appear",
+      "extractionState": "manual"
+    },
+    "This Version of macOS Can't Hide Menu Bar Icons": {
       "extractionState": "manual"
     },
     "Throw your menu bar icons into a drawer. Pull them out when you need them.": {

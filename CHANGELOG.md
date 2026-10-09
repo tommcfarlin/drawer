@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- Drawer works on macOS 27.
+- On macOS 27, closing the drawer hides the apps inside it instantly, with no sliding, and the `]` turns into the archive box right where it was.
+- On macOS 27, Drawer asks once for Accessibility access the first time you close the drawer, and explains in its menu if access isn't allowed yet.
+- Drawer only uses Accessibility access to see which icons are between `[` and `]`.
+- On macOS 27, apps you open while the drawer is closed still show their icons.
+
+### Changed
+- On macOS 27, the drawer hides whole apps, so an app with one icon inside the drawer and one outside hides both.
+- On macOS 27, icons to the left of `[` stay visible when the drawer closes.
+- On macOS 27, macOS's own icons such as Bluetooth and the clock stay visible even inside the drawer, while AirDrop, Focus, and Now Playing are hidden until the drawer opens.
+- On macOS 27, the notch hint is turned off, because macOS 27 now has its own overflow menu for icons that don't fit.
+- Drawer is no longer sandboxed, which Accessibility access requires; your bracket positions and settings carry over automatically.
+- On macOS 27, Drawer needs to run from the Applications folder for the archive box to show while closed.
+
+### Fixed
+- Fixed the drawer flashing the archive box and reopening right away on macOS 27.
+
 ## [0.2.0] - 2026-09-23
 
 ### Added

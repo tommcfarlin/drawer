@@ -56,8 +56,11 @@ Every issue has:
 - The right-click menu is rebuilt each time it opens (`makeMenu(notice:)`); refused or failed closes are explained with a dimmed notice line, never a beep alone
 - All user-facing text goes through `String(localized:)` and `Drawer/Localizable.xcstrings`; add new strings to the catalog
 - Menu bar images are template images; custom ones must be pixel-aligned (see `bracketRects`)
-- Notch (0.2.0): measured without permissions from the window list per display; the hint is passive (menu and tooltip only). Never open or close the drawer automatically. Revealing hidden icons needs Accessibility (#29, opt-in)
-- Minimum macOS 26; universal binary; sandboxed; no permissions; no network
+- Notch (0.2.0, macOS 26 only): measured without permissions from the window list per display; the hint is passive (menu and tooltip only). Never open or close the drawer automatically. Revealing hidden icons needs Accessibility (#29, opt-in)
+- macOS 27 (0.3.0): the wall trick no longer works (an item over ~half the display is dropped; narrower stretches slide every icon). Closing uses the private menu bar allowlist (`DRMenuBarRestriction`, `MBAssessmentModeAssertion`): the drawer's apps (found via `MenuBarAgent`'s Accessibility tree, `MenuBarLayout`) aren't drawn, `[` hides, `]` becomes the archive box. Per app, not per icon; system items stay. See `docs/spec.md` → How hiding works (macOS 27)
+- On macOS 27, AppKit's frames for Drawer's items are unreliable; use Accessibility slots, telling Drawer's items apart by width (the handle is 2pt longer)
+- On macOS 27, Drawer's own items only draw under the allowlist when it runs from `/Applications`; test there. Verify with `MenuBarAgent`'s Accessibility tree from a trusted terminal
+- Minimum macOS 26; universal binary; not sandboxed (0.3.0+); macOS 26 needs no permissions, macOS 27 needs Accessibility; no network
 
 ## Signing
 

@@ -405,4 +405,59 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: .drawerPartlyHidden(visible: 8)), .drawerPartlyHidden(visible: 8))
         XCTAssertEqual(notchFitToExplain(hasNotch: true, state: .open, current: nil, lastOpen: nil), .allFit)
     }
+
+    // MARK: - Allowlist (macOS 27)
+
+    func testAllowlistStartsWithMacOS27() {
+        XCTAssertFalse(usesMenuBarAllowlist(majorVersion: 26))
+        XCTAssertTrue(usesMenuBarAllowlist(majorVersion: 27))
+        XCTAssertTrue(usesMenuBarAllowlist(majorVersion: 28))
+    }
+
+    private func slot(_ minX: CGFloat, _ width: CGFloat) -> MenuBarSlot {
+        MenuBarSlot(minX: minX, width: width)
+    }
+
+    func testAStackedSlotIsNotClear() {
+        XCTAssertFalse(isClear(slot(617, 32), of: [slot(617, 28), slot(620, 25)]))
+        XCTAssertTrue(isClear(slot(1440, 17), of: [slot(1407, 25), slot(1465, 38)]))
+    }
+
+    func testDrawerSlotsAreToldApartByWidth() {
+        let slots = [slot(1407, 25), slot(1969, 23), slot(1992, 32)]
+        XCTAssertEqual(uniqueSlot(width: 25, among: slots), slot(1407, 25))
+        XCTAssertEqual(uniqueSlot(width: 23, among: slots), slot(1969, 23))
+        XCTAssertNil(uniqueSlot(width: 40, among: slots))
+    }
+
+    func testMatchingWidthsAreAmbiguous() {
+        XCTAssertNil(uniqueSlot(width: 23, among: [slot(1409, 23), slot(1969, 23)]))
+    }
+
+    func testOwnersBetweenTheBracketsInOrder() {
+        // Measured on macOS 27: `[` at 1407, `]` at 1969.
+        let slots: [(slot: MenuBarSlot, owner: String)] = [
+            (slot(1300, 30), "outside"),
+            (slot(1407, 25), "drawer"),
+            (slot(1465, 38), "vpn"),
+            (slot(1440, 17), "system"),
+            (slot(1503, 40), "claude"),
+            (slot(1543, 38), "vpn"),
+            (slot(1969, 23), "drawer"),
+            (slot(1992, 38), "brightness"),
+        ]
+        XCTAssertEqual(owners(between: slot(1407, 25), and: slot(1969, 23), in: slots), ["system", "vpn", "claude"])
+    }
+
+    func testNoOwnersInAnEmptyDrawer() {
+        let slots: [(slot: MenuBarSlot, owner: String)] = [(slot(1300, 30), "outside"), (slot(1992, 38), "brightness")]
+        XCTAssertEqual(owners(between: slot(1407, 25), and: slot(1432, 23), in: slots), [])
+    }
+
+    func testAllowedAppsLeaveOutTheDrawersApps() {
+        XCTAssertEqual(
+            allowedApps(running: ["a", "drawer", "b", "a", "c"], hidden: ["b"]),
+            ["a", "drawer", "c"]
+        )
+    }
 }

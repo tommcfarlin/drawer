@@ -1,6 +1,6 @@
 # Drawer — Technical Specification
 
-Companion to [prd.md](prd.md). Describes how Drawer 0.1.0 is built.
+Companion to [prd.md](prd.md). Describes how Drawer 0.3.0 is built.
 
 ## Project
 
@@ -68,6 +68,43 @@ This technique uses only public API and needs no permissions. It's the same basi
 
 **Limitation:** anything left of the handle is also pushed off-screen when the drawer closes. The README explains this.
 
+## How hiding works (macOS 27)
+
+`usesMenuBarAllowlist(majorVersion:)` switches to this from macOS 27. Everything in **How hiding works** above still applies on macOS 26.
+
+### What changed (measured on macOS 27.0.1)
+
+- `MenuBarAgent` draws each display's menu bar as one window. Status items are no longer in the window list, and AppKit reports Drawer's own frames from whichever display's copy it likes (often the built-in display while an external one is main).
+- A status item whose slot is wider than about half its display is dropped from that display (1266pt stayed, 1276pt was dropped on a 2560pt display), and pushes nothing. So `10_000` does nothing, and the front lands wherever the wall left.
+- Below that limit, a wide item still pushes items to its left; ones that no longer fit beside the app's menus go into the system's overflow menu («), leftmost first. This closes the drawer, but macOS animates the push: every icon slides across the bar. Tried and dropped for that reason.
+- The Accessibility tree of `MenuBarAgent` has every display's real layout: one window per display (and per full-screen Space), one slot per item, each hosting an element owned by the item's process. It doesn't say which of an app's items a slot is.
+
+### The allowlist
+
+`MenuBarClientCore` (private) has the facility behind assessment mode: hold an `MBAssessmentModeAssertion` activated with an `MBAssessmentModeConfiguration` listing allowed bundle IDs and system items, and `MenuBarAgent` doesn't draw any other app's status items. `DRMenuBarRestriction` (Objective-C, `MenuBarRestriction.m`) wraps it:
+
+- `isAvailable` checks the framework loads and the classes respond to the selectors; Drawer refuses to close without it ("This Version of macOS Can't Hide Menu Bar Icons").
+- `allowedSystemItems` is always `0...255` (`0...63` drops Screen Mirroring). AirDrop, Focus, and Now Playing are hidden under any assertion; no range or identifier tried keeps them.
+- The configuration takes an `NSArray` only (an `NSSet` throws).
+- The newest assertion wins, so a refresh activates the new one and invalidates the old one only once the new one reports success.
+- Invalidating, or Drawer quitting, restores every icon.
+- Drawer's own items only draw under an assertion when Drawer is the copy LaunchServices resolves (in practice, `/Applications`).
+
+### Closing and opening
+
+1. **Guard:** the allowlist must be available and Drawer must be trusted for Accessibility (`AXIsProcessTrustedWithOptions` prompts on a user's close). Otherwise closing is refused with a menu notice.
+2. **Find the drawer:** `MenuBarLayout.displays()` reads each display's slots. Drawer's slots are the ones owned by its own process; they're told apart by width (`uniqueSlot(width:among:)`), matching each item's AppKit window width, which is reliable even when its position isn't. The handle is `handleExtraLength` (2pt) longer than its image so it's never as wide as the wall. The display used is the first where both brackets are clear of other slots (`isClear`), i.e. not stacked in the overflow menu beside a notch.
+3. `canClose` compares those slots' x.
+4. **Apps in the drawer:** `owners(between:and:in:)` lists the owners of slots between the brackets, minus Drawer and `MenuBarAgent` (system items), as bundle IDs.
+5. **Close:** activate an assertion allowing `allowedApps(running:hidden:)` (every running app except those), hide the handle (`isVisible = false`; it comes back to the same spot), and set the wall's image to the archive box. The archive box bounces on the wall. The front is never shown on macOS 27.
+6. **While closed:** `NSWorkspace.didLaunchApplicationNotification` refreshes the assertion so a newly launched app's icons show.
+7. **Open:** invalidate the assertion, show the handle, and restore `]`.
+8. **Launch:** restoring waits until the handle's and wall's slots are found and stop moving (not AppKit frames). Without Accessibility, Drawer opens.
+
+### Moving from the sandbox
+
+0.2.0 was sandboxed, so its settings (including the brackets' preferred positions) live in `~/Library/Containers/co.pressware.drawer`. On first launch, `AppDelegate.migrateFromSandbox()` copies any keys not already set, before the status items are created, and records `migratedFromSandbox`.
+
 ## Files
 
 | File | Purpose |
@@ -79,11 +116,14 @@ This technique uses only public API and needs no permissions. It's the same basi
 | `Drawer/DrawerApp.swift` | `@main` SwiftUI `App`; `NSApplicationDelegateAdaptor`; an empty `Settings` scene |
 | `Drawer/AppDelegate.swift` | Creates `StatusBarController` on launch |
 | `Drawer/StatusBarController.swift` | Owns the three status items, handles clicks, applies state, restores state at launch, right-click menu, About panel |
-| `Drawer/MenuBarWindows.swift` | Reads each notched display's status item windows (positions, widths, on-screen) from the window list; no permissions |
+| `Drawer/MenuBarWindows.swift` | Reads each notched display's status item windows (positions, widths, on-screen) from the window list; no permissions (macOS 26) |
+| `Drawer/MenuBarLayout.swift` | macOS 27: reads each display's status item slots and their owners from `MenuBarAgent`'s Accessibility tree |
+| `Drawer/MenuBarRestriction.h/.m` | macOS 27: Objective-C wrapper for the private menu bar allowlist (`DRMenuBarRestriction`) |
+| `Drawer/Drawer-Bridging-Header.h` | Exposes `DRMenuBarRestriction` to Swift |
 | `Drawer/DrawerState.swift` | Pure, testable logic (state, symbol name, wall length, front position, close guard, placement check) |
 | `Drawer/Info.plist` | `LSUIElement = YES`; version from build settings; copyright |
 | `Drawer/Assets.xcassets/AppIcon.appiconset` | App icon rendered from the 🗄️ emoji at every required size (16–1024 px) |
-| `Drawer/Drawer.entitlements` | `com.apple.security.app-sandbox = YES` (nothing else) |
+| `Drawer/Drawer.entitlements` | Empty: not sandboxed from 0.3.0 |
 | `Drawer/PrivacyInfo.xcprivacy` | Declares `UserDefaults` access (`CA92.1`), no tracking, no collected data |
 
 ## Pure logic (`DrawerState.swift`)
@@ -105,6 +145,13 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 | `canClose(handleMinX:wallMinX:)` | `true` only if both are known and the handle is strictly left of the wall |
 | `isPlaced(_:on:)` | `true` if the frame has size and sits entirely inside one of the screens |
 | `restoredState(from:)` | Saved raw value, or `.open` if it's missing or unrecognized |
+| `usesMenuBarAllowlist(majorVersion:)` | `true` from macOS 27 |
+| `struct MenuBarSlot` | A slot's `minX` and `width` from the Accessibility tree |
+| `isClear(_:of:)` | `true` if the slot overlaps no other (overflowed items are stacked) |
+| `uniqueSlot(width:among:)` | The one slot of that width (±1pt), or nil |
+| `handleExtraLength` | 2pt added to the handle's length on macOS 27 |
+| `owners(between:and:in:)` | Owners of slots between the handle and the wall, in order, each once |
+| `allowedApps(running:hidden:)` | Running bundle IDs minus the drawer's, each once |
 
 ## `StatusBarController`
 
@@ -233,6 +280,7 @@ On every state change (0.4 s later, retrying up to five times, 0.4 s apart, whil
 | `NSStatusItem Preferred Position DrawerHandle` | `UserDefaults` (managed by AppKit) | Number | — | Where the user dragged `[` |
 | `NSStatusItem Preferred Position DrawerWall` | `UserDefaults` (managed by AppKit; recorded by Drawer if missing) | Number | — | Where `]` is |
 | `NSStatusItem Preferred Position DrawerFront` | `UserDefaults` (written by Drawer before showing the front) | Number | — | Puts the closed drawer just right of the wall |
+| `migratedFromSandbox` | `UserDefaults` | Bool | — | Settings were copied from the 0.2.0 sandbox container |
 
 ## Edge cases
 
@@ -248,6 +296,11 @@ On every state change (0.4 s later, retrying up to five times, 0.4 s apart, whil
 | Menu bar auto-hide enabled | Works the same |
 | Notch hides icons | Out of scope for 0.1.0 (see [future-features.md](future-features.md)) |
 | App quits while closed | All three items disappear and the hidden icons reappear. On relaunch the closed state is restored |
+| macOS 27: Accessibility not allowed | Closing is refused with a notice, after the system prompt; launching closed opens instead |
+| macOS 27: allowlist missing or fails | Closing is refused, or the drawer reopens, with "This Version of macOS Can't Hide Menu Bar Icons" |
+| macOS 27: an app has icons inside and outside the drawer | The whole app hides |
+| macOS 27: an app launches while closed | Its icons show (the assertion is refreshed) |
+| macOS 27: Drawer run from outside `/Applications` | macOS doesn't draw its items under the assertion, so the archive box is missing; opening Drawer again opens the drawer |
 
 ## Accessibility
 
@@ -265,14 +318,19 @@ On every state change (0.4 s later, retrying up to five times, 0.4 s apart, whil
 
 ## Known issues
 
+- **macOS 27: AirDrop, Focus, and Now Playing hide while closed,** under any allowlist tried.
+- **macOS 27: private API.** The allowlist is undocumented; a macOS update could remove it (Drawer then refuses to close).
+- **macOS 27: no notch hint.** It measured the window list, which is empty on macOS 27.
+
 - **Notch hint can be briefly stale:** it's refreshed on state changes, menu opens, and display changes, not while you ⌘-drag icons.
 
 - **AppKit layout warning at launch (low):** Release builds sometimes log once, from AppKit, *"It's not legal to call -layoutSubtreeIfNeeded on a view which is already being laid out."* It predates the bounce, appears during the system's own status item scene setup (alongside Control Center scene-client errors), and didn't reproduce under the debugger with a breakpoint on `_NSDetectedLayoutRecursion`. No visible effect. Revisit if it becomes reproducible.
 
 ## Security and privacy
 
-- App Sandbox on, with no extra entitlements.
+- Not sandboxed (from 0.3.0): sandboxed apps can't use Accessibility on other apps. No entitlements.
 - Hardened Runtime on.
+- macOS 27: Accessibility, used only to read the menu bar's layout (which processes own which slots). Nothing is clicked, moved, or recorded.
 - No network access, no analytics, no data collected.
 - Privacy manifest declares only `UserDefaults` (reason `CA92.1`).
 
@@ -286,7 +344,7 @@ make test   # xcodegen generate && xcodebuild test -scheme Drawer -destination '
 
 Test files live in `DrawerTests/`.
 
-Unit tests (73):
+Unit tests (80):
 
 - `toggled`, `showsFront`, `closedSymbolName`, `menuActionTitle`.
 - VoiceOver: each part's label is distinct, and help matches the next action.
@@ -299,8 +357,11 @@ Unit tests (73):
 - `seededFrontPosition`: follows the wall's saved position; nothing without one.
 - `isNoOp`: a user request for the current state does nothing; a launch restore always applies.
 - `bracketRects`: edges on the pixel grid at 1x and 2x; 1px stroke at 1x and 1.5pt at 2x; `]` mirrors `[`; always inside the canvas.
+- macOS 27: the allowlist starts at 27; stacked slots aren't clear; Drawer's slots are told apart by width, and equal widths are ambiguous; owners between the brackets (measured layout), none in an empty drawer; allowed apps leave out the drawer's, once each.
 
-Command-line checks (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
+Command-line checks on macOS 27 read `MenuBarAgent`'s Accessibility tree from a trusted terminal, and press Drawer's items through its `AXExtrasMenuBar`.
+
+Command-line checks on macOS 26 (with `CGWindowListCopyWindowInfo`, since the menu bar can't be clicked without Accessibility access):
 
 - Open: `[` and `]` are on-screen next to each other, and the next icon starts immediately after `]` (no gap).
 - Closed: `[` and `]` are off-screen, and the archive box is on-screen immediately left of the first always-visible icon.
