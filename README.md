@@ -2,7 +2,7 @@
 
 **Throw your menu bar icons into a drawer. Pull them out when you need them.**
 
-A tiny macOS menu bar app that hides your menu bar icons with one click and brings them back with another. There are no preferences and no permissions to grant.
+A tiny macOS menu bar app that hides your menu bar icons with one click and brings them back with another. There are no preferences. On macOS 27, Drawer asks once for Accessibility access; on macOS 26 it needs no permissions at all.
 
 ## Download
 
@@ -28,19 +28,31 @@ Click the drawer to close it, and everything inside disappears, leaving a small 
 1. Open Drawer. A `[` and a `]` appear side by side in your menu bar.
 2. Hold **⌘ (Command)** and drag each icon you want to hide into the drawer, between `[` and `]`.
 3. Click `[` or `]` to close the drawer.
+4. On macOS 27, the first time you close it, macOS asks you to allow Drawer in **System Settings → Privacy & Security → Accessibility**. Turn Drawer on, then click again. Drawer uses this only to see which icons are between `[` and `]`.
 
 Drawer remembers whether the drawer was open or closed the next time you launch it.
 
 To keep an icon visible all the time, ⌘-drag it to the right of the `]`.
 
-Before you start, read [Good to know](#good-to-know): closing the drawer also hides anything to the left of `[`.
+Before you start, read [Good to know](#good-to-know): on macOS 26, closing the drawer also hides anything to the left of `[`.
 
 ## Good to know
 
-- **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
 - **Keep `[` to the left of `]`.** If they get swapped, Drawer won't close; it beeps and tells you how to fix it.
-- **On a MacBook with a notch,** icons that don't fit beside the notch are hidden by macOS, starting with the drawer's leftmost ones. Keep your favorites right next to `]`: Drawer's menu tells you how many fit.
 - **Can't find the archive box?** macOS sometimes hides menu bar icons when the menu bar is crowded. Open Drawer again (from Finder, Spotlight, or Launchpad) and the drawer opens.
+- **Quitting Drawer always brings your icons back.**
+
+### On macOS 27
+
+- **Drawer hides whole apps.** If an app has one icon inside the drawer and another outside it, both hide while the drawer is closed.
+- **System icons stay visible.** Icons that belong to macOS itself (like Bluetooth or the clock) don't hide, even inside the drawer. AirDrop, Focus, and Now Playing are hidden while the drawer is closed, wherever they are.
+- **Run Drawer from your Applications folder.** Otherwise macOS doesn't show the archive box while the drawer is closed.
+- **Icons left of `[` stay visible**, and new apps show their icons even while the drawer is closed.
+
+### On macOS 26
+
+- **Keep the `[` at the far left of your icons.** Closing the drawer also hides anything to the left of `[`. New apps usually add their icons at the far left, so if one shows up outside the drawer, drag it in (or to the right of `]`).
+- **On a MacBook with a notch,** icons that don't fit beside the notch are hidden by macOS, starting with the drawer's leftmost ones. Keep your favorites right next to `]`: Drawer's menu tells you how many fit.
 
 ## Menu
 
@@ -56,6 +68,7 @@ Hover over any of them to see what a click will do.
 ## Requirements
 
 - macOS 26 Tahoe or later
+- On macOS 27: Accessibility access (Drawer asks the first time you close it)
 
 ## Building
 
