@@ -97,7 +97,7 @@ This technique uses only public API and needs no permissions. It's the same basi
 3. `canClose` compares those slots' x.
 4. **Apps in the drawer:** `owners(between:and:in:)` lists the owners of slots between the brackets, minus Drawer and `MenuBarAgent` (system items), as bundle IDs.
 5. **Close:** activate an assertion allowing `allowedApps(running:hidden:)` (every running app except those), hide the handle (`isVisible = false`; it comes back to the same spot), and set the wall's image to the archive box. The archive box bounces on the wall. The front is never shown on macOS 27.
-6. **While closed:** `NSWorkspace.didLaunchApplicationNotification` refreshes the assertion so a newly launched app's icons show.
+6. **While closed:** key-value observing of `NSWorkspace.runningApplications` refreshes the assertion so a newly launched app's icons show. `didLaunchApplicationNotification` isn't used: macOS doesn't post it for accessory (`LSUIElement`) apps, which most menu bar apps are. The assertion is only replaced when `allowlistNeedsRefresh` finds a running app outside the drawer that isn't allowed yet, since helper processes start and stop constantly. Processes without a bundle ID can't be allowed, so their icons stay hidden until the drawer opens.
 7. **Open:** invalidate the assertion, show the handle, and restore `]`.
 8. **Launch:** restoring waits until the handle's and wall's slots are found and stop moving (not AppKit frames). Without Accessibility, Drawer opens.
 
@@ -152,6 +152,7 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 | `handleExtraLength` | 2pt added to the handle's length on macOS 27 |
 | `owners(between:and:in:)` | Owners of slots between the handle and the wall, in order, each once |
 | `allowedApps(running:hidden:)` | Running bundle IDs minus the drawer's, each once |
+| `allowlistNeedsRefresh(allowed:running:hidden:)` | `true` if a running app outside the drawer isn't on the allowlist yet |
 
 ## `StatusBarController`
 
@@ -299,7 +300,7 @@ On every state change (0.4 s later, retrying up to five times, 0.4 s apart, whil
 | macOS 27: Accessibility not allowed | Closing is refused with a notice, after the system prompt; launching closed opens instead |
 | macOS 27: allowlist missing or fails | Closing is refused, or the drawer reopens, with "This Version of macOS Can't Hide Menu Bar Icons" |
 | macOS 27: an app has icons inside and outside the drawer | The whole app hides |
-| macOS 27: an app launches while closed | Its icons show (the assertion is refreshed) |
+| macOS 27: an app launches while closed | Its icons show (the assertion is refreshed), menu bar-only apps included |
 | macOS 27: Drawer run from outside `/Applications` | macOS doesn't draw its items under the assertion, so the archive box is missing; opening Drawer again opens the drawer |
 
 ## Accessibility

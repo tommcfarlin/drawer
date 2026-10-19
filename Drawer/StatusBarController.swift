@@ -49,6 +49,9 @@ final class StatusBarController: NSObject {
     /// While closed on macOS 27: the apps in the drawer, and the assertion hiding them.
     private var hiddenApps: Set<String> = []
     private var restriction: Any?
+    /// The apps the newest assertion allows.
+    private var allowedNow: Set<String> = []
+    private var runningAppsObservation: NSKeyValueObservation?
     /// The item whose image is swapped out for a bounce.
     private var bouncingItem: NSStatusItem?
 
@@ -117,11 +120,13 @@ final class StatusBarController: NSObject {
             }
         }
         // The allowlist names the apps that may show icons, so an app launched while
-        // the drawer is closed has to be added to it.
-        NSWorkspace.shared.notificationCenter.addObserver(
-            forName: NSWorkspace.didLaunchApplicationNotification, object: nil, queue: .main
-        ) { [weak self] _ in
-            MainActor.assumeIsolated { self?.refreshRestriction() }
+        // the drawer is closed has to be added to it. Menu bar apps are mostly accessory
+        // apps, which `didLaunchApplicationNotification` skips; `runningApplications`
+        // includes them.
+        runningAppsObservation = NSWorkspace.shared.observe(\.runningApplications) { [weak self] _, _ in
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated { self?.refreshRestrictionIfNeeded() }
+            }
         }
     }
 
@@ -443,6 +448,7 @@ final class StatusBarController: NSObject {
             handleItem.isVisible = false
         case .open:
             hiddenApps = []
+            allowedNow = []
             if let restriction { DRMenuBarRestriction.invalidate(restriction) }
             restriction = nil
             handleItem.isVisible = true
@@ -457,6 +463,7 @@ final class StatusBarController: NSObject {
         guard allowlistMenuBar, state == .closed else { return }
         let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
         let allowed = allowedApps(running: running, hidden: hiddenApps)
+        allowedNow = Set(allowed)
         let previous = restriction
         let token = DRMenuBarRestriction.activateAllowing(allowed) { [weak self] error in
             guard let self else { return }
@@ -473,6 +480,16 @@ final class StatusBarController: NSObject {
             return
         }
         restriction = token
+    }
+
+    /// Helpers and services come and go all the time; only an app that isn't allowed yet
+    /// needs a new assertion.
+    private func refreshRestrictionIfNeeded() {
+        guard allowlistMenuBar, state == .closed else { return }
+        let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
+        guard allowlistNeedsRefresh(allowed: allowedNow, running: running, hidden: hiddenApps) else { return }
+        Self.log.debug("an app launched while closed; refreshing the allowlist")
+        refreshRestriction()
     }
 
     private func reopenAfterFailedClose() {
