@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+- On macOS 27, menu bar apps you open while the drawer is closed now show their icons right away, instead of staying hidden until the drawer opens.
+
 ## [0.3.0] - 2026-10-09
 
 ### Added

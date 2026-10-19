@@ -305,3 +305,9 @@ func allowedApps(running: [String], hidden: Set<String>) -> [String] {
     var seen = Set<String>()
     return running.filter { !hidden.contains($0) && seen.insert($0).inserted }
 }
+
+/// Whether a running app outside the drawer is missing from the allowlist, so the
+/// assertion has to be replaced. Apps that quit can stay on it; they draw nothing.
+func allowlistNeedsRefresh(allowed: Set<String>, running: [String], hidden: Set<String>) -> Bool {
+    running.contains { !hidden.contains($0) && !allowed.contains($0) }
+}
