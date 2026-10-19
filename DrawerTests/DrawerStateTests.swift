@@ -460,4 +460,13 @@ final class DrawerStateTests: XCTestCase {
             ["a", "drawer", "c"]
         )
     }
+
+    func testAllowlistRefreshesForANewApp() {
+        XCTAssertTrue(allowlistNeedsRefresh(allowed: ["a"], running: ["a", "new"], hidden: ["b"]))
+    }
+
+    func testAllowlistKeepsItsAssertionWhenNothingIsNew() {
+        XCTAssertFalse(allowlistNeedsRefresh(allowed: ["a", "c"], running: ["a", "b", "a"], hidden: ["b"]))
+        XCTAssertFalse(allowlistNeedsRefresh(allowed: ["a", "gone"], running: ["a"], hidden: []))
+    }
 }
