@@ -311,3 +311,57 @@ func allowedApps(running: [String], hidden: Set<String>) -> [String] {
 func allowlistNeedsRefresh(allowed: Set<String>, running: [String], hidden: Set<String>) -> Bool {
     running.contains { !hidden.contains($0) && !allowed.contains($0) }
 }
+
+// MARK: - Notification Center pass-through (macOS 27)
+
+/// While the drawer is closed on macOS 27, the menu bar allowlist blocks Notification
+/// Center. A click on the clock releases the allowlist, opens Notification Center, and
+/// the allowlist comes back once Notification Center closes.
+enum PassThroughPhase: Equatable {
+    /// Nothing passed through; the allowlist is held while the drawer is closed.
+    case idle
+    /// The allowlist was released and the clock pressed; Notification Center hasn't
+    /// appeared yet.
+    case waiting(elapsed: TimeInterval)
+    /// Notification Center is open.
+    case open
+}
+
+enum PassThroughStep: Equatable {
+    case keepWatching(PassThroughPhase)
+    /// Notification Center closed (or never opened): hide the drawer's icons again.
+    case restore
+}
+
+/// How long to wait for Notification Center to appear before giving up.
+let passThroughOpenTimeout: TimeInterval = 3
+
+/// One tick of watching Notification Center after the allowlist is released.
+func passThroughStep(_ phase: PassThroughPhase, notificationCenterOpen: Bool, interval: TimeInterval) -> PassThroughStep {
+    switch phase {
+    case .idle:
+        return .keepWatching(.idle)
+    case let .waiting(elapsed):
+        if notificationCenterOpen { return .keepWatching(.open) }
+        let total = elapsed + interval
+        return total >= passThroughOpenTimeout ? .restore : .keepWatching(.waiting(elapsed: total))
+    case .open:
+        return notificationCenterOpen ? .keepWatching(.open) : .restore
+    }
+}
+
+/// Only a click on the clock, while the drawer is closed with the allowlist held and
+/// nothing is already passing through, opens Notification Center this way.
+func shouldPassThrough(state: DrawerState, usesAllowlist: Bool, phase: PassThroughPhase, clickIsOnClock: Bool) -> Bool {
+    usesAllowlist && state == .closed && phase == .idle && clickIsOnClock
+}
+
+/// AppKit puts the screen origin at the bottom-left of the main display;
+/// Accessibility and the window list put it at the top-left.
+func topLeftPoint(fromAppKit point: CGPoint, mainDisplayMaxY: CGFloat) -> CGPoint {
+    CGPoint(x: point.x, y: mainDisplayMaxY - point.y)
+}
+
+func isClockClick(at point: CGPoint, clockFrames: [CGRect]) -> Bool {
+    clockFrames.contains { $0.contains(point) }
+}
