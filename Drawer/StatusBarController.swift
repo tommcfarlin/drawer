@@ -54,6 +54,17 @@ final class StatusBarController: NSObject {
     private var runningAppsObservation: NSKeyValueObservation?
     /// The item whose image is swapped out for a bounce.
     private var bouncingItem: NSStatusItem?
+    /// While closed on macOS 27: the allowlist blocks Notification Center, so clicks on
+    /// the clock are watched for and passed through (see **Notification Center** below).
+    private var clockMonitor: Any?
+    private var clocks: [MenuBarLayout.Clock] = []
+    private var passThrough: PassThroughPhase = .idle
+    private var passThroughTimer: Timer?
+    private var passThroughClock: MenuBarLayout.Clock?
+    private var passThroughRetried = false
+    private static let passThroughInterval: TimeInterval = 0.2
+    /// Accessibility calls to `MenuBarAgent` can take seconds; keep them off the main thread.
+    private static let accessibilityQueue = DispatchQueue(label: "co.pressware.drawer.accessibility")
 
     override init() {
         // The front is created before anything can be measured. Without a saved
@@ -117,6 +128,8 @@ final class StatusBarController: NSObject {
         ) { [weak self] _ in
             MainActor.assumeIsolated {
                 DispatchQueue.main.asyncAfter(deadline: .now() + Self.notchRefreshDelay) { self?.refreshNotchTooltip() }
+                // Each display's menu bar has its own clock.
+                self?.refreshClocks()
             }
         }
         // The allowlist names the apps that may show icons, so an app launched while
@@ -446,7 +459,9 @@ final class StatusBarController: NSObject {
         case .closed:
             refreshRestriction()
             handleItem.isVisible = false
+            startWatchingClock()
         case .open:
+            stopWatchingClock()
             hiddenApps = []
             allowedNow = []
             if let restriction { DRMenuBarRestriction.invalidate(restriction) }
@@ -460,7 +475,9 @@ final class StatusBarController: NSObject {
     /// The newest assertion wins at once, so the old one is only dropped once the new one
     /// is active: the drawer's icons never flash back.
     private func refreshRestriction() {
-        guard allowlistMenuBar, state == .closed else { return }
+        // While Notification Center is passed through, the allowlist stays released;
+        // it comes back when Notification Center closes.
+        guard allowlistMenuBar, state == .closed, passThrough == .idle else { return }
         let running = NSWorkspace.shared.runningApplications.compactMap(\.bundleIdentifier)
         let allowed = allowedApps(running: running, hidden: hiddenApps)
         allowedNow = Set(allowed)
@@ -490,6 +507,103 @@ final class StatusBarController: NSObject {
         guard allowlistNeedsRefresh(allowed: allowedNow, running: running, hidden: hiddenApps) else { return }
         Self.log.debug("an app launched while closed; refreshing the allowlist")
         refreshRestriction()
+    }
+
+    // MARK: - Notification Center
+
+    // Any menu bar allowlist assertion blocks Notification Center, so while the drawer is
+    // closed, clicking the clock does nothing. Drawer watches for that click, releases the
+    // allowlist (the drawer's icons show for a moment), presses the clock itself (the
+    // original click is already lost), and hides the icons again once Notification
+    // Center closes. Only clock clicks pass through; the trackpad swipe doesn't.
+
+    private func startWatchingClock() {
+        guard allowlistMenuBar, clockMonitor == nil else { return }
+        refreshClocks()
+        clockMonitor = NSEvent.addGlobalMonitorForEvents(matching: .leftMouseDown) { [weak self] _ in
+            MainActor.assumeIsolated { self?.mouseDown(at: NSEvent.mouseLocation) }
+        }
+    }
+
+    private func stopWatchingClock() {
+        if let clockMonitor { NSEvent.removeMonitor(clockMonitor) }
+        clockMonitor = nil
+        passThroughTimer?.invalidate()
+        passThroughTimer = nil
+        passThroughClock = nil
+        passThrough = .idle
+    }
+
+    /// Finding the clock takes up to a few seconds, too slow to do on the click, so it's
+    /// found ahead of time: on close, and when displays change.
+    private func refreshClocks() {
+        guard allowlistMenuBar, state == .closed else { return }
+        Self.accessibilityQueue.async {
+            let found = MenuBarLayout.clocks()
+            DispatchQueue.main.async {
+                MainActor.assumeIsolated {
+                    self.clocks = found
+                    Self.log.debug("found \(found.count, privacy: .public) clock(s)")
+                }
+            }
+        }
+    }
+
+    private func mouseDown(at location: CGPoint) {
+        let point = topLeftPoint(fromAppKit: location, mainDisplayMaxY: NSScreen.screens.first?.frame.maxY ?? 0)
+        let clock = clocks.first { $0.frame.contains(point) }
+        guard shouldPassThrough(state: state, usesAllowlist: allowlistMenuBar, phase: passThrough, clickIsOnClock: clock != nil),
+              let clock else { return }
+        Self.log.notice("Clock clicked while closed; opening Notification Center")
+        passThrough = .waiting(elapsed: 0)
+        if let restriction { DRMenuBarRestriction.invalidate(restriction) }
+        restriction = nil
+        allowedNow = []
+        passThroughClock = clock
+        passThroughRetried = false
+        // A press right after the release is ignored; give the block time to lift.
+        pressClock(clock, after: passThroughPressDelay)
+        passThroughTimer?.invalidate()
+        let timer = Timer(timeInterval: Self.passThroughInterval, repeats: true) { [weak self] _ in
+            MainActor.assumeIsolated { self?.watchNotificationCenter() }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        passThroughTimer = timer
+    }
+
+    /// Presses the clock through Accessibility on a background queue. If the cached
+    /// element went stale (the menu bar restarted), it looks for the clock once more.
+    private func pressClock(_ clock: MenuBarLayout.Clock, after delay: TimeInterval = 0) {
+        let log = Self.log
+        Self.accessibilityQueue.asyncAfter(deadline: .now() + delay) {
+            var result = AXUIElementPerformAction(clock.element, kAXPressAction as CFString)
+            if result != .success {
+                let fresh = MenuBarLayout.clocks().first { $0.frame.intersects(clock.frame) }
+                result = fresh.map { AXUIElementPerformAction($0.element, kAXPressAction as CFString) } ?? result
+            }
+            if result != .success {
+                log.error("Couldn't open Notification Center (\(result.rawValue, privacy: .public))")
+            }
+        }
+    }
+
+    private func watchNotificationCenter() {
+        if shouldRetryPress(passThrough, alreadyRetried: passThroughRetried), let clock = passThroughClock {
+            Self.log.notice("Notification Center hasn't appeared; pressing the clock again")
+            passThroughRetried = true
+            pressClock(clock)
+        }
+        switch passThroughStep(passThrough, notificationCenterOpen: MenuBarLayout.notificationCenterIsOpen, interval: Self.passThroughInterval) {
+        case let .keepWatching(phase):
+            passThrough = phase
+        case .restore:
+            Self.log.notice("Notification Center closed; hiding the drawer's icons again")
+            passThroughTimer?.invalidate()
+            passThroughTimer = nil
+            passThroughClock = nil
+            passThrough = .idle
+            refreshRestriction()
+        }
     }
 
     private func reopenAfterFailedClose() {
