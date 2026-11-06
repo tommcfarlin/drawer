@@ -107,7 +107,7 @@ Any menu bar allowlist assertion blocks Notification Center for as long as it's 
 
 1. When closing, Drawer installs a global left-mouse-down monitor (`NSEvent.addGlobalMonitorForEvents`; Accessibility already allows it). It also finds the clock on every display's menu bar ahead of time, because the lookup takes 0.4–2.5 s: `MenuBarLayout.clocks()` returns the `com.apple.menuextra.clock` element and its slot's frame. Drawer finds the clocks again when displays change.
 2. A mouse-down inside a clock's slot (AppKit point converted with `topLeftPoint(fromAppKit:mainDisplayMaxY:)`, hit-tested against the cached frames) releases the assertion. The drawer's icons show while Notification Center is open.
-3. Releasing the assertion doesn't revive the original click (Notification Center never opened in 3 of 3 tries), so Drawer presses the clock with `AXPress` on a background queue. If the cached element went stale, it looks again once. Notification Center then appears in about 0.1–0.3 s.
+3. Releasing the assertion doesn't revive the original click (Notification Center never opened in 3 of 3 tries), so Drawer presses the clock with `AXPress` on a background queue. The block lifts a moment after the release: a press within 50 ms of it is ignored, and one 100 ms or later works (measured, 8 of 8). So Drawer presses after `passThroughPressDelay` (0.3 s). If the cached element went stale, it looks for the clock again once. Notification Center appears about 0.1–0.3 s after a press that works. If it hasn't appeared after `passThroughRetryAfter` (1.2 s), Drawer presses once more (`shouldRetryPress`).
 4. Every 0.2 s, `passThroughStep` checks whether Notification Center's window (owner `Notification Center`, layer 21) is on screen. When it closes, or if it never appears within `passThroughOpenTimeout` (3 s), the assertion is activated again if the drawer is still closed. `refreshRestriction()` does nothing while a pass-through is in progress, so launching an app can't re-hide the icons early.
 5. Opening the drawer stops watching and ends any pass-through.
 
@@ -146,7 +146,7 @@ These live at file scope, or as a value type, so the non-hosted test target can 
 |--------|----------|
 | `enum DrawerState: String { case open, closed }` | `toggled`; `showsFront` (closed only); `menuActionTitle` ("Close Drawer" / "Open Drawer") |
 | `enum DrawerPart { handle, wall, front }` | `accessibilityLabel(for:)`; `accessibilityHelp(for: DrawerState)` |
-| `shouldPassThrough(state:usesAllowlist:phase:clickIsOnClock:)`, `passThroughStep(_:notificationCenterOpen:interval:)`, `topLeftPoint(fromAppKit:mainDisplayMaxY:)`, `isClockClick(at:clockFrames:)` | Notification Center pass-through on macOS 27 (see **Notification Center while closed**) |
+| `shouldPassThrough(state:usesAllowlist:phase:clickIsOnClock:)`, `passThroughStep(_:notificationCenterOpen:interval:)`, `topLeftPoint(fromAppKit:mainDisplayMaxY:)`, `isClockClick(at:clockFrames:)`, `shouldRetryPress(_:alreadyRetried:)` | Notification Center pass-through on macOS 27 (see **Notification Center while closed**) |
 | `isNoOp(current:requested:userInitiated:)` | `true` when the user asks for the current state; launch restores always apply |
 | `clickAction(eventType:modifiers:)` | `.showMenu` for right-up or Control + left-up; otherwise `.toggle` |
 | `bracketSize`, `bracketRects(opening:scale:)` | Pixel-aligned rectangles for `[` / `]` |

@@ -336,6 +336,21 @@ enum PassThroughStep: Equatable {
 /// How long to wait for Notification Center to appear before giving up.
 let passThroughOpenTimeout: TimeInterval = 3
 
+/// The block on Notification Center lifts a moment after the allowlist is released: a
+/// press within about 50 ms is ignored, and one after 100 ms works (measured on macOS
+/// 27.0.1). Press after three times that.
+let passThroughPressDelay: TimeInterval = 0.3
+
+/// If Notification Center hasn't appeared this long after the first press, press once
+/// more. A press that works shows it within about 0.3 s, so this can't close it again.
+let passThroughRetryAfter: TimeInterval = 1.2
+
+/// Whether to press the clock a second time while waiting for Notification Center.
+func shouldRetryPress(_ phase: PassThroughPhase, alreadyRetried: Bool) -> Bool {
+    guard !alreadyRetried, case let .waiting(elapsed) = phase else { return false }
+    return elapsed >= passThroughRetryAfter
+}
+
 /// One tick of watching Notification Center after the allowlist is released.
 func passThroughStep(_ phase: PassThroughPhase, notificationCenterOpen: Bool, interval: TimeInterval) -> PassThroughStep {
     switch phase {

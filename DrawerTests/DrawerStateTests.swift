@@ -514,4 +514,21 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertFalse(isClockClick(at: CGPoint(x: 147, y: 184), clockFrames: clocks))
         XCTAssertFalse(isClockClick(at: CGPoint(x: 2474, y: 15), clockFrames: []))
     }
+
+    func testPressDelayClearsTheMeasuredThreshold() {
+        // Presses within 50 ms of the release were ignored; 100 ms and later worked.
+        XCTAssertGreaterThanOrEqual(passThroughPressDelay, 0.2)
+        XCTAssertLessThan(passThroughPressDelay + passThroughRetryAfter, passThroughOpenTimeout)
+    }
+
+    func testRetriesThePressOnceAfterWaiting() {
+        XCTAssertFalse(shouldRetryPress(.waiting(elapsed: 0.6), alreadyRetried: false))
+        XCTAssertTrue(shouldRetryPress(.waiting(elapsed: passThroughRetryAfter), alreadyRetried: false))
+        XCTAssertFalse(shouldRetryPress(.waiting(elapsed: 2.0), alreadyRetried: true))
+    }
+
+    func testNeverRetriesOnceNotificationCenterIsOpenOrIdle() {
+        XCTAssertFalse(shouldRetryPress(.open, alreadyRetried: false))
+        XCTAssertFalse(shouldRetryPress(.idle, alreadyRetried: false))
+    }
 }

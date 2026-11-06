@@ -60,6 +60,8 @@ final class StatusBarController: NSObject {
     private var clocks: [MenuBarLayout.Clock] = []
     private var passThrough: PassThroughPhase = .idle
     private var passThroughTimer: Timer?
+    private var passThroughClock: MenuBarLayout.Clock?
+    private var passThroughRetried = false
     private static let passThroughInterval: TimeInterval = 0.2
     /// Accessibility calls to `MenuBarAgent` can take seconds; keep them off the main thread.
     private static let accessibilityQueue = DispatchQueue(label: "co.pressware.drawer.accessibility")
@@ -528,6 +530,7 @@ final class StatusBarController: NSObject {
         clockMonitor = nil
         passThroughTimer?.invalidate()
         passThroughTimer = nil
+        passThroughClock = nil
         passThrough = .idle
     }
 
@@ -556,18 +559,10 @@ final class StatusBarController: NSObject {
         if let restriction { DRMenuBarRestriction.invalidate(restriction) }
         restriction = nil
         allowedNow = []
-        let log = Self.log
-        Self.accessibilityQueue.async {
-            var result = AXUIElementPerformAction(clock.element, kAXPressAction as CFString)
-            if result != .success {
-                // A cached element goes stale if the menu bar restarts; look again.
-                let fresh = MenuBarLayout.clocks().first { $0.frame.intersects(clock.frame) }
-                result = fresh.map { AXUIElementPerformAction($0.element, kAXPressAction as CFString) } ?? result
-            }
-            if result != .success {
-                log.error("Couldn't open Notification Center (\(result.rawValue, privacy: .public))")
-            }
-        }
+        passThroughClock = clock
+        passThroughRetried = false
+        // A press right after the release is ignored; give the block time to lift.
+        pressClock(clock, after: passThroughPressDelay)
         passThroughTimer?.invalidate()
         let timer = Timer(timeInterval: Self.passThroughInterval, repeats: true) { [weak self] _ in
             MainActor.assumeIsolated { self?.watchNotificationCenter() }
@@ -576,7 +571,28 @@ final class StatusBarController: NSObject {
         passThroughTimer = timer
     }
 
+    /// Presses the clock through Accessibility on a background queue. If the cached
+    /// element went stale (the menu bar restarted), it looks for the clock once more.
+    private func pressClock(_ clock: MenuBarLayout.Clock, after delay: TimeInterval = 0) {
+        let log = Self.log
+        Self.accessibilityQueue.asyncAfter(deadline: .now() + delay) {
+            var result = AXUIElementPerformAction(clock.element, kAXPressAction as CFString)
+            if result != .success {
+                let fresh = MenuBarLayout.clocks().first { $0.frame.intersects(clock.frame) }
+                result = fresh.map { AXUIElementPerformAction($0.element, kAXPressAction as CFString) } ?? result
+            }
+            if result != .success {
+                log.error("Couldn't open Notification Center (\(result.rawValue, privacy: .public))")
+            }
+        }
+    }
+
     private func watchNotificationCenter() {
+        if shouldRetryPress(passThrough, alreadyRetried: passThroughRetried), let clock = passThroughClock {
+            Self.log.notice("Notification Center hasn't appeared; pressing the clock again")
+            passThroughRetried = true
+            pressClock(clock)
+        }
         switch passThroughStep(passThrough, notificationCenterOpen: MenuBarLayout.notificationCenterIsOpen, interval: Self.passThroughInterval) {
         case let .keepWatching(phase):
             passThrough = phase
@@ -584,6 +600,7 @@ final class StatusBarController: NSObject {
             Self.log.notice("Notification Center closed; hiding the drawer's icons again")
             passThroughTimer?.invalidate()
             passThroughTimer = nil
+            passThroughClock = nil
             passThrough = .idle
             refreshRestriction()
         }
