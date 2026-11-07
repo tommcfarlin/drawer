@@ -65,6 +65,54 @@ enum MenuBarLayout {
         }
     }
 
+    /// The clock on one display's menu bar: the element to press, and its slot's frame
+    /// for hit-testing clicks (Accessibility coordinates).
+    struct Clock {
+        let element: AXUIElement
+        let frame: CGRect
+    }
+
+    private static let clockIdentifier = "com.apple.menuextra.clock"
+
+    /// The clock on every display's menu bar. Slow (up to a few seconds), so call it off
+    /// the main thread and keep the result.
+    static func clocks() -> [Clock] {
+        guard let agent = NSRunningApplication.runningApplications(withBundleIdentifier: agentBundleID).first else { return [] }
+        let element = AXUIElementCreateApplication(agent.processIdentifier)
+        AXUIElementSetMessagingTimeout(element, messagingTimeout)
+        var seen: [CGRect] = []
+        var found: [Clock] = []
+        for window in children(of: element) {
+            guard let windowFrame = frame(of: window), windowFrame.width > 0, !seen.contains(windowFrame) else { continue }
+            seen.append(windowFrame)
+            for slot in children(of: window) {
+                guard let slotFrame = frame(of: slot), slotFrame.width > 0,
+                      let clock = descendant(of: slot, identifier: clockIdentifier, depth: 3) else { continue }
+                found.append(Clock(element: clock, frame: slotFrame))
+                break
+            }
+        }
+        return found
+    }
+
+    /// Whether Notification Center is on screen (its full-display window, layer 21).
+    static var notificationCenterIsOpen: Bool {
+        guard let windows = CGWindowListCopyWindowInfo([.optionOnScreenOnly], kCGNullWindowID) as? [[String: Any]] else { return false }
+        return windows.contains {
+            ($0[kCGWindowOwnerName as String] as? String) == "Notification Center"
+                && ($0[kCGWindowLayer as String] as? Int) == 21
+        }
+    }
+
+    private static func descendant(of element: AXUIElement, identifier: String, depth: Int) -> AXUIElement? {
+        if (value(of: element, kAXIdentifierAttribute) as String?) == identifier { return element }
+        guard depth > 0 else { return nil }
+        for child in children(of: element) {
+            if let match = descendant(of: child, identifier: identifier, depth: depth - 1) { return match }
+        }
+        return nil
+    }
+
     // MARK: - Accessibility helpers
 
     private static func value<T>(of element: AXUIElement, _ attribute: String) -> T? {

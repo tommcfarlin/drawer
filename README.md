@@ -44,6 +44,7 @@ Before you start, read [Good to know](#good-to-know): on macOS 26, closing the d
 
 ### On macOS 27
 
+- **Notification Center while closed.** Clicking the clock still opens Notification Center while the drawer is closed. The drawer's icons show until you close Notification Center, then hide again. The trackpad swipe for Notification Center only works while the drawer is open.
 - **Drawer hides whole apps.** If an app has one icon inside the drawer and another outside it, both hide while the drawer is closed.
 - **System icons stay visible.** Icons that belong to macOS itself (like Bluetooth or the clock) don't hide, even inside the drawer. AirDrop, Focus, and Now Playing are hidden while the drawer is closed, wherever they are.
 - **Run Drawer from your Applications folder.** Otherwise macOS doesn't show the archive box while the drawer is closed.

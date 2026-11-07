@@ -469,4 +469,66 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertFalse(allowlistNeedsRefresh(allowed: ["a", "c"], running: ["a", "b", "a"], hidden: ["b"]))
         XCTAssertFalse(allowlistNeedsRefresh(allowed: ["a", "gone"], running: ["a"], hidden: []))
     }
+
+    // MARK: - Notification Center pass-through
+
+    func testPassesThroughOnlyAClockClickWhileClosedWithTheAllowlist() {
+        XCTAssertTrue(shouldPassThrough(state: .closed, usesAllowlist: true, phase: .idle, clickIsOnClock: true))
+        XCTAssertFalse(shouldPassThrough(state: .open, usesAllowlist: true, phase: .idle, clickIsOnClock: true))
+        XCTAssertFalse(shouldPassThrough(state: .closed, usesAllowlist: false, phase: .idle, clickIsOnClock: true))
+        XCTAssertFalse(shouldPassThrough(state: .closed, usesAllowlist: true, phase: .idle, clickIsOnClock: false))
+    }
+
+    func testIgnoresClockClicksWhilePassingThrough() {
+        XCTAssertFalse(shouldPassThrough(state: .closed, usesAllowlist: true, phase: .open, clickIsOnClock: true))
+        XCTAssertFalse(shouldPassThrough(state: .closed, usesAllowlist: true, phase: .waiting(elapsed: 0.2), clickIsOnClock: true))
+    }
+
+    func testWaitingMovesToOpenWhenNotificationCenterAppears() {
+        XCTAssertEqual(passThroughStep(.waiting(elapsed: 0), notificationCenterOpen: true, interval: 0.2), .keepWatching(.open))
+    }
+
+    func testWaitingKeepsCountingUntilTheTimeout() {
+        XCTAssertEqual(passThroughStep(.waiting(elapsed: 0), notificationCenterOpen: false, interval: 0.2), .keepWatching(.waiting(elapsed: 0.2)))
+        XCTAssertEqual(passThroughStep(.waiting(elapsed: passThroughOpenTimeout - 0.2), notificationCenterOpen: false, interval: 0.2), .restore)
+    }
+
+    func testRestoresWhenNotificationCenterCloses() {
+        XCTAssertEqual(passThroughStep(.open, notificationCenterOpen: true, interval: 0.2), .keepWatching(.open))
+        XCTAssertEqual(passThroughStep(.open, notificationCenterOpen: false, interval: 0.2), .restore)
+    }
+
+    func testIdleNeverRestores() {
+        XCTAssertEqual(passThroughStep(.idle, notificationCenterOpen: false, interval: 0.2), .keepWatching(.idle))
+    }
+
+    func testAppKitPointConvertsToTopLeftSpace() {
+        // The clock click the experiment logged at (2474, 15) on a 1440pt-tall main display.
+        XCTAssertEqual(topLeftPoint(fromAppKit: CGPoint(x: 2474, y: 1425), mainDisplayMaxY: 1440), CGPoint(x: 2474, y: 15))
+    }
+
+    func testClockHitTestingAcrossDisplays() {
+        let clocks = [CGRect(x: 2383, y: 0, width: 177, height: 30), CGRect(x: -151.5, y: 477, width: 131.5, height: 39)]
+        XCTAssertTrue(isClockClick(at: CGPoint(x: 2474, y: 15), clockFrames: clocks))
+        XCTAssertTrue(isClockClick(at: CGPoint(x: -100, y: 490), clockFrames: clocks))
+        XCTAssertFalse(isClockClick(at: CGPoint(x: 147, y: 184), clockFrames: clocks))
+        XCTAssertFalse(isClockClick(at: CGPoint(x: 2474, y: 15), clockFrames: []))
+    }
+
+    func testPressDelayClearsTheMeasuredThreshold() {
+        // Presses within 50 ms of the release were ignored; 100 ms and later worked.
+        XCTAssertGreaterThanOrEqual(passThroughPressDelay, 0.2)
+        XCTAssertLessThan(passThroughPressDelay + passThroughRetryAfter, passThroughOpenTimeout)
+    }
+
+    func testRetriesThePressOnceAfterWaiting() {
+        XCTAssertFalse(shouldRetryPress(.waiting(elapsed: 0.6), alreadyRetried: false))
+        XCTAssertTrue(shouldRetryPress(.waiting(elapsed: passThroughRetryAfter), alreadyRetried: false))
+        XCTAssertFalse(shouldRetryPress(.waiting(elapsed: 2.0), alreadyRetried: true))
+    }
+
+    func testNeverRetriesOnceNotificationCenterIsOpenOrIdle() {
+        XCTAssertFalse(shouldRetryPress(.open, alreadyRetried: false))
+        XCTAssertFalse(shouldRetryPress(.idle, alreadyRetried: false))
+    }
 }
