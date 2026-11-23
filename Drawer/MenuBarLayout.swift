@@ -51,12 +51,16 @@ enum MenuBarLayout {
         return children(of: element).compactMap { window -> Display? in
             guard let windowFrame = frame(of: window), windowFrame.width > 0, !seen.contains(windowFrame) else { return nil }
             seen.append(windowFrame)
-            let slots = children(of: window).compactMap { element -> Slot? in
-                // Each slot appears twice: a plain element hosting the item, and (for
-                // system items) a group with the same frame. Keep the plain one.
-                guard ((value(of: element, kAXRoleAttribute) as String?) ?? "").isEmpty,
-                      let slotFrame = frame(of: element), slotFrame.width > 0,
-                      let host = children(of: element).first else { return nil }
+            // macOS 27.0 lists each system slot twice (a plain element and a group with
+            // the same frame); 27.2 lists one group per slot, with a role. Keep one per frame.
+            let candidates = children(of: window).compactMap { element -> (element: AXUIElement, frame: CGRect, noRole: Bool)? in
+                guard let slotFrame = frame(of: element), slotFrame.width > 0 else { return nil }
+                return (element, slotFrame, ((value(of: element, kAXRoleAttribute) as String?) ?? "").isEmpty)
+            }
+            let keep = slotIndicesToKeep(frames: candidates.map(\.frame), hasNoRole: candidates.map(\.noRole))
+            let slots = keep.compactMap { i -> Slot? in
+                let (element, slotFrame, _) = candidates[i]
+                guard let host = children(of: element).first else { return nil }
                 var pid: pid_t = 0
                 AXUIElementGetPid(host, &pid)
                 return Slot(slot: MenuBarSlot(minX: slotFrame.minX, width: slotFrame.width), owner: pid, isDrawers: pid == ownPID)

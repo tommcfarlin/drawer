@@ -35,6 +35,10 @@
     "How to Use Drawer…": {
       "extractionState": "manual"
     },
+    "Can't Find the Drawer in the Menu Bar": {
+      "comment": "Shown when the drawer can't close because Drawer couldn't locate its brackets in the menu bar",
+      "extractionState": "manual"
+    },
     "Move [ to the Left of ] to Use the Drawer": {
       "comment": "Shown when the drawer can't close because [ is right of ]",
       "extractionState": "manual"
