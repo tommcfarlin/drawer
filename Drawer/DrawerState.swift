@@ -114,6 +114,30 @@ func canClose(handleMinX: CGFloat?, wallMinX: CGFloat?) -> Bool {
     return h < w
 }
 
+/// Why a close was refused: the brackets are in the wrong order, or Drawer couldn't
+/// find where they are. The two need different messages.
+enum CloseRefusal: Equatable { case misplaced, notFound }
+
+func closeRefusal(handleMinX: CGFloat?, wallMinX: CGFloat?) -> CloseRefusal? {
+    guard handleMinX != nil, wallMinX != nil else { return .notFound }
+    return canClose(handleMinX: handleMinX, wallMinX: wallMinX) ? nil : .misplaced
+}
+
+/// One slot per distinct frame. macOS 27.0 lists a plain element and a group with the
+/// same frame; macOS 27.2 lists a single group, with a role. Returns the index to keep
+/// for each frame (in order), preferring the element with no role.
+func slotIndicesToKeep(frames: [CGRect], hasNoRole: [Bool]) -> [Int] {
+    var kept: [(frame: CGRect, index: Int)] = []
+    for (i, frame) in frames.enumerated() {
+        if let k = kept.firstIndex(where: { $0.frame == frame }) {
+            if hasNoRole[i], !hasNoRole[kept[k].index] { kept[k].index = i }
+        } else {
+            kept.append((frame, i))
+        }
+    }
+    return kept.map(\.index)
+}
+
 /// Whether a status item's window has a real on-screen position yet.
 /// While the menu bar is still laying out, frames can be empty or off every screen.
 func isPlaced(_ frame: CGRect, on screens: [CGRect]) -> Bool {

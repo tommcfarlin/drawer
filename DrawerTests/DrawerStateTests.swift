@@ -82,6 +82,39 @@ final class DrawerStateTests: XCTestCase {
         XCTAssertEqual(frontPreferredPosition(wallPosition: 433), 432)
     }
 
+    // MARK: - closeRefusal and slotIndicesToKeep
+
+    func testCloseRefusalNotFoundWhenASlotIsMissing() {
+        XCTAssertEqual(closeRefusal(handleMinX: nil, wallMinX: 200), .notFound)
+        XCTAssertEqual(closeRefusal(handleMinX: 100, wallMinX: nil), .notFound)
+    }
+
+    func testCloseRefusalMisplacedWhenHandleIsRightOfWall() {
+        XCTAssertEqual(closeRefusal(handleMinX: 300, wallMinX: 200), .misplaced)
+    }
+
+    func testCloseRefusalNilWhenOrdered() {
+        XCTAssertNil(closeRefusal(handleMinX: 100, wallMinX: 200))
+    }
+
+    func testSlotsWithRolesAreKept() {
+        // macOS 27.2: one group per slot, all with a role.
+        let frames = [CGRect(x: 0, y: 0, width: 25, height: 30), CGRect(x: 30, y: 0, width: 23, height: 30)]
+        XCTAssertEqual(slotIndicesToKeep(frames: frames, hasNoRole: [false, false]), [0, 1])
+    }
+
+    func testDuplicateFramesKeepThePlainElement() {
+        // macOS 27.0: a group, then a plain element with the same frame.
+        let f = CGRect(x: 0, y: 0, width: 25, height: 30)
+        XCTAssertEqual(slotIndicesToKeep(frames: [f, f], hasNoRole: [false, true]), [1])
+        XCTAssertEqual(slotIndicesToKeep(frames: [f, f], hasNoRole: [true, false]), [0])
+    }
+
+    func testDuplicateFramesWithoutAPlainElementKeepTheFirst() {
+        let f = CGRect(x: 0, y: 0, width: 25, height: 30)
+        XCTAssertEqual(slotIndicesToKeep(frames: [f, f], hasNoRole: [false, false]), [0])
+    }
+
     // MARK: - canClose
 
     func testCanCloseWhenHandleIsLeftOfWall() {

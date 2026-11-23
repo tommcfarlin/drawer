@@ -232,10 +232,16 @@ final class StatusBarController: NSObject {
             wallMinX = drawerDisplay?.slot(for: wallItem)?.minX
         }
         Self.log.debug("setState \(newState.rawValue, privacy: .public) handle=\(String(describing: handleMinX), privacy: .public) wall=\(String(describing: wallMinX), privacy: .public)")
-        if newState == .closed, !canClose(handleMinX: handleMinX, wallMinX: wallMinX) {
-            Self.log.notice("Refused to close: the handle is not left of the wall")
+        if newState == .closed, let refusal = closeRefusal(handleMinX: handleMinX, wallMinX: wallMinX) {
+            switch refusal {
+            case .misplaced:
+                Self.log.notice("Refused to close: the handle is not left of the wall")
+                refusalNotice = Self.misplacedHandleNotice
+            case .notFound:
+                Self.log.notice("Refused to close: couldn't find the handle or the wall in the menu bar")
+                refusalNotice = Self.slotsNotFoundNotice
+            }
             if userInitiated { NSSound.beep() }
-            refusalNotice = Self.misplacedHandleNotice
             return false
         }
         if allowlistMenuBar, newState == .closed {
@@ -284,6 +290,7 @@ final class StatusBarController: NSObject {
 
     private static let menuBarFullNotice = String(localized: "The Menu Bar Is Too Full to Close the Drawer")
     private static let misplacedHandleNotice = String(localized: "Move [ to the Left of ] to Use the Drawer")
+    private static let slotsNotFoundNotice = String(localized: "Can't Find the Drawer in the Menu Bar")
     private static let accessibilityNotice = String(localized: "Allow Drawer in Accessibility Settings to Close the Drawer")
     private static let unavailableNotice = String(localized: "This Version of macOS Can't Hide Menu Bar Icons")
 
